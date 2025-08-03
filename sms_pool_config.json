@@ -1,0 +1,9 @@
+{
+  "settings": {
+    "send_interval": 1000,
+    "card_switch": 60,
+    "success_threshold": 1000,
+    "monitor_numbers": ""
+  },
+  "tasks": {}
+}

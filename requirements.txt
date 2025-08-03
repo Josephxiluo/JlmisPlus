@@ -1,0 +1,30 @@
+# 猫池短信管理系统依赖库
+
+# 串口通信
+pyserial>=3.5
+
+# 系统信息
+psutil>=5.8.0
+
+python-dotenv>=0.19.0
+
+SQLAlchemy>=1.4.0
+
+psycopg2-binary>=2.9.0
+
+Werkzeug>=2.0.0
+
+# GUI相关（tkinter是Python内置的，但可能需要额外安装）
+# tkinter  # 通常内置，如果需要可以取消注释
+
+# 可选依赖 - 如果需要更多功能
+# pandas>=1.3.0          # 数据处理
+# openpyxl>=3.0.0        # Excel文件支持
+# xlrd>=2.0.0            # Excel读取
+# matplotlib>=3.3.0      # 图表绘制
+# pillow>=8.0.0          # 图像处理
+
+# 开发和测试依赖
+# pytest>=6.0.0          # 单元测试
+# black>=21.0.0          # 代码格式化
+# flake8>=3.8.0          # 代码检查

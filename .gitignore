@@ -1,0 +1,32 @@
+# Python Bytecode Files
+*.pyc
+*.pyo
+*.pyd
+__pycache__
+
+# Virtual Environments
+venv/
+.env/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# PyInstaller
+/dist/
+build/
+*.spec
+
+# Logs
+logs/
+
+# IDEs
+.vscode/
+.idea/
+
+# Python distribution package
+*.egg-info/
+*.eggs/
