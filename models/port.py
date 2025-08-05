@@ -609,7 +609,7 @@ class PortManager:
     """端口管理器"""
 
     def __init__(self):
-        self.ports: Dict[str, Port] = {}
+        self.ports: Dict[str, Port] = field(default_factory=dict)
         self._lock = threading.Lock()
 
     def scan_and_update_ports(self) -> List[Port]:

@@ -1,6 +1,6 @@
 """
-猫池短信系统数据库连接管理 - tkinter版
-Database connection management for SMS Pool System - tkinter version
+猫池短信系统数据库连接管理 - tkinter版 (修复版)
+Database connection management for SMS Pool System - tkinter version (Fixed)
 """
 
 import os
@@ -14,6 +14,7 @@ from typing import Optional, Dict, Any, List, Tuple, Union
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
+import atexit
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent
@@ -52,21 +53,56 @@ except ImportError:
         return logger
 
     def log_database_action(action, table=None, details=None, success=True):
-        logger = get_logger()
-        if success:
-            logger.info(f"数据库操作: {action} {table or ''} {details or ''}")
-        else:
-            logger.error(f"数据库操作失败: {action} {table or ''} {details or ''}")
+        try:
+            logger = get_logger()
+            if success:
+                logger.info(f"数据库操作: {action} {table or ''} {details or ''}")
+            else:
+                logger.error(f"数据库操作失败: {action} {table or ''} {details or ''}")
+        except:
+            # 忽略日志错误，避免程序退出时的异常
+            pass
 
     def log_error(message, error=None):
-        logger = get_logger()
-        logger.error(f"{message}: {error}" if error else message)
+        try:
+            logger = get_logger()
+            logger.error(f"{message}: {error}" if error else message)
+        except:
+            pass
 
     def log_info(message):
-        logger = get_logger()
-        logger.info(message)
+        try:
+            logger = get_logger()
+            logger.info(message)
+        except:
+            pass
 
 logger = get_logger('database.connection')
+
+
+def safe_log_info(message):
+    """安全的日志记录函数，避免程序退出时的错误"""
+    try:
+        log_info(message)
+    except (ValueError, OSError):
+        # 忽略文件已关闭或I/O错误
+        pass
+
+
+def safe_log_error(message, error=None):
+    """安全的错误日志记录函数"""
+    try:
+        log_error(message, error)
+    except (ValueError, OSError):
+        pass
+
+
+def safe_log_database_action(action, table=None, details=None, success=True):
+    """安全的数据库操作日志记录函数"""
+    try:
+        log_database_action(action, table, details, success)
+    except (ValueError, OSError):
+        pass
 
 
 def retry_on_failure(max_retries: int = None, delay: float = 1.0):
@@ -84,13 +120,13 @@ def retry_on_failure(max_retries: int = None, delay: float = 1.0):
                 except (OperationalError, DatabaseError) as e:
                     last_exception = e
                     if attempt < max_retries:
-                        log_error(f"数据库操作失败，第{attempt + 1}次重试", error=e)
+                        safe_log_error(f"数据库操作失败，第{attempt + 1}次重试", error=e)
                         time.sleep(delay * (attempt + 1))
                     else:
-                        log_error(f"数据库操作失败，已达最大重试次数", error=e)
+                        safe_log_error(f"数据库操作失败，已达最大重试次数", error=e)
                         raise last_exception
                 except Exception as e:
-                    log_error(f"数据库操作异常", error=e)
+                    safe_log_error(f"数据库操作异常", error=e)
                     raise e
             raise last_exception
         return wrapper
@@ -102,6 +138,7 @@ class DatabaseConnection:
 
     _instance = None
     _lock = threading.Lock()
+    _cleanup_registered = False
 
     def __new__(cls):
         """单例模式"""
@@ -120,6 +157,7 @@ class DatabaseConnection:
         self._connection_pool: Optional[psycopg2.pool.ThreadedConnectionPool] = None
         self._pool_lock = threading.Lock()
         self._is_connected = False
+        self._cleanup_done = False
 
         # 数据库连接信息
         self._connection_info = {
@@ -132,15 +170,33 @@ class DatabaseConnection:
             'connect_timeout': settings.DB_POOL_TIMEOUT
         }
 
+        # 注册程序退出时的清理函数
+        if not DatabaseConnection._cleanup_registered:
+            atexit.register(self._cleanup_on_exit)
+            DatabaseConnection._cleanup_registered = True
+
         # 尝试初始化连接池
         self._init_connection_pool()
+
+    def _cleanup_on_exit(self):
+        """程序退出时的清理函数"""
+        if not self._cleanup_done:
+            self._cleanup_done = True
+            try:
+                if self._connection_pool and not self._connection_pool.closed:
+                    self._connection_pool.closeall()
+                    # 使用print而不是logger，避免日志系统已关闭的问题
+                    print("数据库连接池已安全关闭")
+            except Exception:
+                # 忽略清理过程中的任何错误
+                pass
 
     def _init_connection_pool(self):
         """初始化连接池"""
         try:
             with self._pool_lock:
                 if self._connection_pool is None:
-                    log_info("正在初始化数据库连接池...")
+                    safe_log_info("正在初始化数据库连接池...")
 
                     self._connection_pool = psycopg2.pool.ThreadedConnectionPool(
                         minconn=1,
@@ -154,12 +210,12 @@ class DatabaseConnection:
                     self._connection_pool.putconn(test_conn)
 
                     self._is_connected = True
-                    log_info(f"数据库连接池初始化成功: {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
-                    log_database_action("连接池初始化", details=f"池大小={settings.DB_POOL_SIZE}")
+                    safe_log_info(f"数据库连接池初始化成功: {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
+                    safe_log_database_action("连接池初始化", details=f"池大小={settings.DB_POOL_SIZE}")
 
         except Exception as e:
             self._is_connected = False
-            log_error("数据库连接池初始化失败", error=e)
+            safe_log_error("数据库连接池初始化失败", error=e)
             self._connection_pool = None
             # 不抛出异常，允许应用继续运行
 
@@ -179,7 +235,7 @@ class DatabaseConnection:
 
             # 检查连接状态
             if connection.closed:
-                log_error("连接已关闭，重新获取连接")
+                safe_log_error("连接已关闭，重新获取连接")
                 self._connection_pool.putconn(connection, close=True)
                 connection = self._connection_pool.getconn()
 
@@ -188,14 +244,14 @@ class DatabaseConnection:
         except Exception as e:
             if connection and not connection.closed:
                 connection.rollback()
-            log_error("数据库连接错误", error=e)
+            safe_log_error("数据库连接错误", error=e)
             raise
         finally:
             if connection:
                 try:
                     self._connection_pool.putconn(connection)
                 except Exception as e:
-                    log_error("归还连接失败", error=e)
+                    safe_log_error("归还连接失败", error=e)
 
     @contextmanager
     def get_cursor(self, commit: bool = True, dict_cursor: bool = False):
@@ -215,7 +271,7 @@ class DatabaseConnection:
 
             except Exception as e:
                 connection.rollback()
-                log_error("数据库操作错误", error=e)
+                safe_log_error("数据库操作错误", error=e)
                 raise
             finally:
                 if cursor:
@@ -233,20 +289,20 @@ class DatabaseConnection:
 
                 if fetch_one:
                     result = cursor.fetchone()
-                    log_database_action("查询", details=f"返回单条记录, 耗时={time.time()-start_time:.3f}s")
+                    safe_log_database_action("查询", details=f"返回单条记录, 耗时={time.time()-start_time:.3f}s")
                     if settings.SQL_DEBUG:
-                        log_info(f"SQL: {query[:100]}...")
+                        safe_log_info(f"SQL: {query[:100]}...")
                     return result
                 else:
                     result = cursor.fetchall()
-                    log_database_action("查询", details=f"返回{len(result)}条记录, 耗时={time.time()-start_time:.3f}s")
+                    safe_log_database_action("查询", details=f"返回{len(result)}条记录, 耗时={time.time()-start_time:.3f}s")
                     if settings.SQL_DEBUG:
-                        log_info(f"SQL: {query[:100]}...")
+                        safe_log_info(f"SQL: {query[:100]}...")
                     return result
 
         except Exception as e:
-            log_database_action("查询", details=f"SQL: {query[:100]}...", success=False)
-            log_error("查询执行失败", error=e)
+            safe_log_database_action("查询", details=f"SQL: {query[:100]}...", success=False)
+            safe_log_error("查询执行失败", error=e)
             raise
 
     @retry_on_failure()
@@ -259,17 +315,17 @@ class DatabaseConnection:
                 cursor.execute(query, params)
                 rowcount = cursor.rowcount
 
-                log_database_action("更新", details=f"影响{rowcount}行, 耗时={time.time()-start_time:.3f}s")
+                safe_log_database_action("更新", details=f"影响{rowcount}行, 耗时={time.time()-start_time:.3f}s")
                 if settings.SQL_DEBUG:
-                    log_info(f"SQL: {query[:100]}...")
+                    safe_log_info(f"SQL: {query[:100]}...")
                 return rowcount
 
         except IntegrityError as e:
-            log_database_action("更新", details=f"完整性约束错误: {e}", success=False)
+            safe_log_database_action("更新", details=f"完整性约束错误: {e}", success=False)
             raise
         except Exception as e:
-            log_database_action("更新", details=f"SQL: {query[:100]}...", success=False)
-            log_error("更新执行失败", error=e)
+            safe_log_database_action("更新", details=f"SQL: {query[:100]}...", success=False)
+            safe_log_error("更新执行失败", error=e)
             raise
 
     @retry_on_failure()
@@ -282,14 +338,14 @@ class DatabaseConnection:
                 cursor.executemany(query, params_list)
                 rowcount = cursor.rowcount
 
-                log_database_action("批量更新", details=f"批次={len(params_list)}, 影响{rowcount}行, 耗时={time.time()-start_time:.3f}s")
+                safe_log_database_action("批量更新", details=f"批次={len(params_list)}, 影响{rowcount}行, 耗时={time.time()-start_time:.3f}s")
                 if settings.SQL_DEBUG:
-                    log_info(f"SQL: {query[:100]}...")
+                    safe_log_info(f"SQL: {query[:100]}...")
                 return rowcount
 
         except Exception as e:
-            log_database_action("批量更新", details=f"批次={len(params_list)}", success=False)
-            log_error("批量执行失败", error=e)
+            safe_log_database_action("批量更新", details=f"批次={len(params_list)}", success=False)
+            safe_log_error("批量执行失败", error=e)
             raise
 
     @retry_on_failure()
@@ -304,17 +360,17 @@ class DatabaseConnection:
                     result = cursor.fetchone()
                     if result:
                         ret_val = result[0] if len(result) == 1 else result
-                        log_database_action("函数调用", details=f"{function_name}, 耗时={time.time()-start_time:.3f}s")
+                        safe_log_database_action("函数调用", details=f"{function_name}, 耗时={time.time()-start_time:.3f}s")
                         return ret_val
                     return None
                 except:
                     ret_val = cursor.rowcount
-                    log_database_action("存储过程调用", details=f"{function_name}, 影响{ret_val}行, 耗时={time.time()-start_time:.3f}s")
+                    safe_log_database_action("存储过程调用", details=f"{function_name}, 影响{ret_val}行, 耗时={time.time()-start_time:.3f}s")
                     return ret_val
 
         except Exception as e:
-            log_database_action("函数调用", details=f"{function_name}", success=False)
-            log_error("函数调用失败", error=e)
+            safe_log_database_action("函数调用", details=f"{function_name}", success=False)
+            safe_log_error("函数调用失败", error=e)
             raise
 
     def execute_transaction(self, operations: List[Dict[str, Any]]) -> bool:
@@ -330,12 +386,12 @@ class DatabaseConnection:
                         cursor.execute(query, params)
 
                     connection.commit()
-                    log_database_action("事务", details=f"包含{len(operations)}个操作, 耗时={time.time()-start_time:.3f}s")
+                    safe_log_database_action("事务", details=f"包含{len(operations)}个操作, 耗时={time.time()-start_time:.3f}s")
                     return True
 
         except Exception as e:
-            log_database_action("事务", details=f"包含{len(operations)}个操作", success=False)
-            log_error("事务执行失败", error=e)
+            safe_log_database_action("事务", details=f"包含{len(operations)}个操作", success=False)
+            safe_log_error("事务执行失败", error=e)
             return False
 
     def test_connection(self) -> bool:
@@ -343,11 +399,11 @@ class DatabaseConnection:
         try:
             result = self.execute_query("SELECT 1", fetch_one=True)
             if result and result[0] == 1:
-                log_info("数据库连接测试成功")
+                safe_log_info("数据库连接测试成功")
                 return True
             return False
         except Exception as e:
-            log_error("数据库连接测试失败", error=e)
+            safe_log_error("数据库连接测试失败", error=e)
             return False
 
     def get_server_version(self) -> str:
@@ -356,7 +412,7 @@ class DatabaseConnection:
             result = self.execute_query("SELECT version()", fetch_one=True)
             return result[0] if result else "未知版本"
         except Exception as e:
-            log_error("获取数据库版本失败", error=e)
+            safe_log_error("获取数据库版本失败", error=e)
             return "获取失败"
 
     def get_database_size(self) -> str:
@@ -366,7 +422,7 @@ class DatabaseConnection:
             result = self.execute_query(query, (settings.DB_NAME,), fetch_one=True)
             return result[0] if result else "未知大小"
         except Exception as e:
-            log_error("获取数据库大小失败", error=e)
+            safe_log_error("获取数据库大小失败", error=e)
             return "获取失败"
 
     def get_table_count(self, table_name: str, where_clause: str = None, params: tuple = None) -> int:
@@ -382,7 +438,7 @@ class DatabaseConnection:
             result = self.execute_query(query, query_params, fetch_one=True)
             return result[0] if result else 0
         except Exception as e:
-            log_error(f"获取表{table_name}记录数失败", error=e)
+            safe_log_error(f"获取表{table_name}记录数失败", error=e)
             return 0
 
     def check_table_exists(self, table_name: str) -> bool:
@@ -398,7 +454,7 @@ class DatabaseConnection:
             result = self.execute_query(query, (table_name,), fetch_one=True)
             return result[0] if result else False
         except Exception as e:
-            log_error(f"检查表{table_name}是否存在失败", error=e)
+            safe_log_error(f"检查表{table_name}是否存在失败", error=e)
             return False
 
     def get_connection_stats(self) -> Dict[str, Any]:
@@ -431,7 +487,7 @@ class DatabaseConnection:
 
             return stats
         except Exception as e:
-            log_error("获取连接统计失败", error=e)
+            safe_log_error("获取连接统计失败", error=e)
             return {'error': str(e), 'connected': False}
 
     def is_connected(self) -> bool:
@@ -441,36 +497,47 @@ class DatabaseConnection:
     def reconnect(self) -> bool:
         """重新连接数据库"""
         try:
-            log_info("尝试重新连接数据库...")
+            safe_log_info("尝试重新连接数据库...")
             self.close_pool()
             self._init_connection_pool()
 
             if self.test_connection():
-                log_info("数据库重连成功")
+                safe_log_info("数据库重连成功")
                 return True
             else:
-                log_error("数据库重连失败")
+                safe_log_error("数据库重连失败")
                 return False
         except Exception as e:
-            log_error("数据库重连异常", error=e)
+            safe_log_error("数据库重连异常", error=e)
             return False
 
     def close_pool(self):
         """关闭连接池"""
+        if self._cleanup_done:
+            return
+
         try:
             if self._connection_pool and not self._connection_pool.closed:
                 self._connection_pool.closeall()
-                log_info("数据库连接池已关闭")
-                log_database_action("连接池关闭")
+                safe_log_info("数据库连接池已关闭")
+                safe_log_database_action("连接池关闭")
         except Exception as e:
-            log_error("关闭连接池失败", error=e)
+            safe_log_error("关闭连接池失败", error=e)
         finally:
             self._connection_pool = None
             self._is_connected = False
 
     def __del__(self):
         """析构函数"""
-        self.close_pool()
+        # 在析构函数中不记录日志，避免程序退出时的错误
+        if not self._cleanup_done:
+            try:
+                if self._connection_pool and not self._connection_pool.closed:
+                    self._connection_pool.closeall()
+            except Exception:
+                pass
+            finally:
+                self._cleanup_done = True
 
 
 # 全局数据库连接实例
@@ -537,12 +604,12 @@ def close_database():
 def init_database() -> bool:
     """初始化数据库（检查连接和基础表）"""
     try:
-        log_info("开始初始化数据库...")
+        safe_log_info("开始初始化数据库...")
 
         # 测试连接
         db = get_db_connection()
         if not db.test_connection():
-            log_error("数据库连接失败，无法初始化")
+            safe_log_error("数据库连接失败，无法初始化")
             return False
 
         # 检查关键表是否存在
@@ -558,14 +625,14 @@ def init_database() -> bool:
                 missing_tables.append(table)
 
         if missing_tables:
-            log_error(f"缺少必要的数据库表: {', '.join(missing_tables)}")
-            log_error("请确保数据库已正确初始化")
+            safe_log_error(f"缺少必要的数据库表: {', '.join(missing_tables)}")
+            safe_log_error("请确保数据库已正确初始化")
             return False
 
-        log_info("数据库初始化检查完成")
-        log_database_action("数据库初始化", details="所有必要表已存在")
+        safe_log_info("数据库初始化检查完成")
+        safe_log_database_action("数据库初始化", details="所有必要表已存在")
         return True
 
     except Exception as e:
-        log_error("数据库初始化失败", error=e)
+        safe_log_error("数据库初始化失败", error=e)
         return False
