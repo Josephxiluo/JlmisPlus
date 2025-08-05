@@ -99,14 +99,10 @@ class MainWindow:
 
         # 插入示例端口信息
         port_text.config(state=tk.NORMAL)
-        port_text.insert(tk.END, "端口扫描中...
-")
-        port_text.insert(tk.END, "COM1  中国移动  60  0  可用
-")
-        port_text.insert(tk.END, "COM2  中国联通  60  0  可用
-")
-        port_text.insert(tk.END, "COM3  中国电信  60  0  离线
-")
+        port_text.insert(tk.END, "端口扫描中...\n")
+        port_text.insert(tk.END, "COM1  中国移动  60  0  可用\n")
+        port_text.insert(tk.END, "COM2  中国联通  60  0  可用\n")
+        port_text.insert(tk.END, "COM3  中国电信  60  0  离线\n")
         port_text.config(state=tk.DISABLED)
 
     def add_task(self):
