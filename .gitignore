@@ -326,3 +326,17 @@ statistics/
 # 版本控制相关
 .git/
 .svn/
+
+
+# 临时文件
+temp/uploads/*
+temp/exports/*
+temp/cache/*
+
+# 配置文件
+.env.local
+.env.production
+
+# 数据库备份
+*.sql
+*.dump
