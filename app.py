@@ -17,29 +17,16 @@ sys.path.insert(0, str(project_root))
 # 设置工作目录
 os.chdir(project_root)
 
+# 检查Python版本
+if sys.version_info < (3, 7):
+    print("错误：需要Python 3.7或更高版本")
+    sys.exit(1)
+
 try:
     import tkinter as tk
     from tkinter import messagebox
 except ImportError:
     print("错误：未找到tkinter模块，请安装Python的tkinter支持")
-    sys.exit(1)
-
-try:
-    # 导入配置模块
-    from config.settings import Settings
-    from config.logging_config import setup_logging, get_logger
-
-    # 导入UI模块
-    from ui.login_window import LoginWindow
-    from ui.main_window import MainWindow
-
-    # 导入服务模块
-    from services import initialize_all_services, shutdown_all_services
-
-except ImportError as e:
-    print(f"导入模块失败: {e}")
-    print("请检查项目目录结构和依赖库是否正确安装")
-    traceback.print_exc()
     sys.exit(1)
 
 
@@ -53,32 +40,29 @@ class Application:
         self.login_window = None
         self.main_window = None
         self.user_info = None
+        self.services_initialized = False
 
     def initialize(self):
         """初始化应用组件"""
         try:
-            # 设置日志
-            setup_logging()
-            self.logger = get_logger('app')
+            # 首先初始化基本配置
+            if not self._init_basic_config():
+                return False
+
+            # 初始化日志系统
+            if not self._init_logging():
+                return False
+
             self.logger.info("=" * 50)
             self.logger.info("猫池短信系统启动")
             self.logger.info("=" * 50)
 
-            # 加载设置
-            self.settings = Settings()
-            self.logger.info("配置加载完成")
-
             # 创建必要的目录
-            self.create_directories()
+            self._create_directories()
 
-            # 初始化服务
-            self.logger.info("正在初始化服务...")
-            service_results = initialize_all_services()
-
-            # 检查服务初始化结果
-            failed_services = [name for name, success in service_results.items() if not success]
-            if failed_services:
-                self.logger.warning(f"以下服务初始化失败: {failed_services}")
+            # 初始化服务（延迟加载，避免循环导入）
+            if not self._init_services():
+                self.logger.warning("部分服务初始化失败，某些功能可能不可用")
             else:
                 self.logger.info("所有服务初始化成功")
 
@@ -94,7 +78,36 @@ class Application:
                 traceback.print_exc()
             return False
 
-    def create_directories(self):
+    def _init_basic_config(self):
+        """初始化基本配置"""
+        try:
+            from config.settings import settings
+            self.settings = settings
+            return True
+        except ImportError as e:
+            print(f"无法加载配置模块: {e}")
+            print("请检查config目录和依赖库是否正确安装")
+            return False
+
+    def _init_logging(self):
+        """初始化日志系统"""
+        try:
+            from config.logging_config import setup_logging, get_logger
+            setup_logging()
+            self.logger = get_logger('app')
+            return True
+        except ImportError as e:
+            print(f"无法加载日志模块: {e}")
+            # 创建简单的控制台日志
+            import logging
+            logging.basicConfig(level=logging.INFO)
+            self.logger = logging.getLogger('app')
+            return True
+        except Exception as e:
+            print(f"日志系统初始化失败: {e}")
+            return False
+
+    def _create_directories(self):
         """创建必要的目录"""
         directories = [
             'temp',
@@ -105,13 +118,43 @@ class Application:
 
         for directory in directories:
             dir_path = project_root / directory
-            dir_path.mkdir(parents=True, exist_ok=True)
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                self.logger.warning(f"创建目录 {directory} 失败: {e}")
 
         self.logger.info("目录结构检查完成")
+
+    def _init_services(self):
+        """初始化服务（延迟加载）"""
+        try:
+            # 延迟导入服务模块，避免循环导入
+            from services import initialize_all_services
+            service_results = initialize_all_services()
+
+            # 检查服务初始化结果
+            failed_services = [name for name, success in service_results.items() if not success]
+            if failed_services:
+                self.logger.warning(f"以下服务初始化失败: {failed_services}")
+                return False
+            else:
+                self.services_initialized = True
+                return True
+
+        except ImportError as e:
+            self.logger.error(f"无法导入服务模块: {e}")
+            self.logger.error("应用将以有限功能模式运行")
+            return False
+        except Exception as e:
+            self.logger.error(f"服务初始化异常: {e}")
+            return False
 
     def show_login(self):
         """显示登录窗口"""
         try:
+            # 延迟导入UI模块
+            from ui.login_window import LoginWindow
+
             self.logger.info("显示登录窗口")
             self.login_window = LoginWindow()
             self.user_info = self.login_window.show()
@@ -123,6 +166,11 @@ class Application:
                 self.logger.info("用户取消登录")
                 return False
 
+        except ImportError as e:
+            error_msg = f"无法加载登录窗口: {str(e)}"
+            self.logger.error(error_msg)
+            messagebox.showerror("模块错误", error_msg)
+            return False
         except Exception as e:
             error_msg = f"登录过程出错: {str(e)}"
             self.logger.error(error_msg)
@@ -137,10 +185,17 @@ class Application:
     def show_main_window(self):
         """显示主窗口"""
         try:
+            # 延迟导入UI模块
+            from ui.main_window import MainWindow
+
             self.logger.info("显示主窗口")
             self.main_window = MainWindow(self.user_info)
             self.main_window.show()
 
+        except ImportError as e:
+            error_msg = f"无法加载主窗口: {str(e)}"
+            self.logger.error(error_msg)
+            messagebox.showerror("模块错误", error_msg)
         except Exception as e:
             error_msg = f"主窗口运行出错: {str(e)}"
             self.logger.error(error_msg)
@@ -156,8 +211,13 @@ class Application:
         try:
             self.logger.info("正在清理应用资源...")
 
-            # 关闭所有服务
-            shutdown_all_services()
+            # 关闭服务
+            if self.services_initialized:
+                try:
+                    from services import shutdown_all_services
+                    shutdown_all_services()
+                except Exception as e:
+                    self.logger.error(f"关闭服务失败: {e}")
 
             # 清理窗口资源
             if self.main_window:
@@ -182,6 +242,7 @@ class Application:
         try:
             # 初始化应用
             if not self.initialize():
+                messagebox.showerror("初始化失败", "应用初始化失败，请检查配置和依赖")
                 return False
 
             # 显示登录窗口
@@ -194,7 +255,8 @@ class Application:
             return True
 
         except KeyboardInterrupt:
-            self.logger.info("用户中断程序")
+            if self.logger:
+                self.logger.info("用户中断程序")
             return False
 
         except Exception as e:
@@ -222,10 +284,9 @@ def check_environment():
     # 检查必要模块
     required_modules = [
         'tkinter',
-        'sqlite3',
-        'threading',
-        'datetime',
         'pathlib',
+        'datetime',
+        'threading',
         'json',
         'uuid'
     ]
@@ -239,20 +300,28 @@ def check_environment():
     # 检查项目目录结构
     required_dirs = [
         'config',
-        'database',
-        'models',
-        'services',
-        'core',
         'ui',
         'ui/components',
-        'ui/dialogs',
-        'ui/styles'
+        'ui/dialogs'
     ]
 
     for directory in required_dirs:
         dir_path = project_root / directory
         if not dir_path.exists():
             errors.append(f"缺少目录: {directory}")
+
+    # 检查核心配置文件
+    required_files = [
+        'config/settings.py',
+        'config/logging_config.py',
+        'ui/login_window.py',
+        'ui/main_window.py'
+    ]
+
+    for file_path in required_files:
+        file_full_path = project_root / file_path
+        if not file_full_path.exists():
+            errors.append(f"缺少核心文件: {file_path}")
 
     return errors
 
@@ -311,6 +380,7 @@ if __name__ == '__main__':
             root.destroy()
         except:
             pass
+
 
     sys.excepthook = handle_exception
 

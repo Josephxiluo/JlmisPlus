@@ -1,32 +1,328 @@
-# Python Bytecode Files
-*.pyc
-*.pyo
-*.pyd
-__pycache__
+# 猫池短信系统 .gitignore 文件 - tkinter版
 
-# Virtual Environments
+# ===================================
+# Python相关
+# ===================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller打包文件
+*.manifest
+*.spec
+dist/
+build/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
 venv/
-.env/
+env/
+ENV/
+env.bak/
+venv.bak/
 
+# ===================================
+# IDE和编辑器
+# ===================================
+# PyCharm
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ===================================
+# 操作系统相关
+# ===================================
 # Windows
 Thumbs.db
+ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
 
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
 
-# PyInstaller
-/dist/
-build/
-*.spec
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
 
-# Logs
+# ===================================
+# 项目特定文件
+# ===================================
+# 环境配置文件（包含敏感信息）
+.env
+.env.local
+.env.development
+.env.production
+.env.backup
+
+# 日志文件
+temp/logs/
+*.log
 logs/
 
-# IDEs
-.vscode/
-.idea/
+# 临时文件和上传文件
+temp/uploads/
+temp/exports/
+temp/cache/
 
-# Python distribution package
-*.egg-info/
-*.eggs/
+# 数据库备份文件
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+database/backup/
+
+# ===================================
+# 用户数据和配置
+# ===================================
+# 用户配置文件
+config/user_settings.json
+config/local_config.py
+
+# 用户数据文件
+user_data/
+customer_data/
+
+# 导出的文件
+exports/
+downloads/
+
+# ===================================
+# tkinter相关
+# ===================================
+# tkinter缓存文件
+*.tcl
+*.tk
+
+# 字体缓存
+font_cache/
+
+# 图片缓存
+image_cache/
+
+# ===================================
+# 串口和设备相关
+# ===================================
+# 设备配置文件
+device_config/
+port_settings/
+
+# 设备日志
+device_logs/
+port_logs/
+
+# ===================================
+# 开发和测试
+# ===================================
+# 测试数据
+test_data/
+sample_data/
+mock_data/
+
+# 性能测试结果
+performance/
+benchmarks/
+
+# 临时脚本
+temp_scripts/
+scratch/
+debug/
+
+# ===================================
+# 文档和资源
+# ===================================
+# 生成的文档
+docs/_build/
+docs/build/
+site/
+
+# 用户手册和帮助文件
+*.chm
+*.hlp
+
+# ===================================
+# 安全相关
+# ===================================
+# 密钥文件
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# 密码和令牌文件
+passwords.txt
+tokens.txt
+secrets.json
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# ===================================
+# 媒体文件
+# ===================================
+# 彩信附件
+mms_attachments/
+media_files/
+
+# 图片和视频
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.mp4
+*.avi
+*.mov
+
+# 音频文件
+*.mp3
+*.wav
+*.flac
+
+# ===================================
+# 压缩文件
+# ===================================
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.bz2
+
+# ===================================
+# 系统文件
+# ===================================
+# Windows系统文件
+desktop.ini
+$RECYCLE.BIN
+
+# macOS系统文件
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux系统文件
+.directory
+
+# ===================================
+# 第三方工具
+# ===================================
+# Node.js (如果使用相关工具)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 其他工具的配置文件
+.eslintrc
+.prettierrc
+.editorconfig
+
+# ===================================
+# 项目特定忽略
+# ===================================
+# 客户特定配置
+customer_config/
+client_settings/
+
+# 运行时生成的文件
+runtime/
+cache/
+
+# 统计和报告文件
+reports/
+statistics/
+
+# 版本控制相关
+.git/
+.svn/
