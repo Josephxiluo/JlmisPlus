@@ -1,5 +1,5 @@
 """
-完整主窗口 - 集成所有UI组件
+优化后的完整主窗口 - 现代化设计集成
 """
 import tkinter as tk
 from tkinter import messagebox
@@ -10,10 +10,8 @@ import os
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 导入UI组件
-from ui.components.status_bar import StatusBar
-from ui.components.task_list_widget import TaskListWidget
-from ui.components.port_grid_widget import PortGridWidget
+# 导入优化后的UI组件
+from ui.styles import get_color, get_font, get_spacing
 from ui.components.timer_widget import TimerWidget, TimerManager
 
 # 导入对话框
@@ -23,12 +21,9 @@ from ui.dialogs.task_edit_dialog import TaskEditDialog
 from ui.dialogs.config_dialog import ConfigDialog
 from ui.dialogs.export_dialog import ExportDialog
 
-# 导入样式
-from ui.styles import get_color, get_font
-
 
 class MainWindow:
-    """完整主窗口类"""
+    """优化后的完整主窗口类"""
 
     def __init__(self, user_info: Dict[str, Any]):
         """初始化主窗口"""
@@ -55,9 +50,12 @@ class MainWindow:
     def show(self):
         """显示主窗口"""
         self.root = tk.Tk()
-        self.root.title(f"Pulsesports 1.9.0-rc.1-首发 - {self.normalized_user_info.get('real_name', '用户')}")
-        self.root.geometry("1200x800")
+        self.root.title(f"Pulsesports 1.9.0-rc.1-首发 - 测试操作员")
+        self.root.geometry("1400x900")
         self.root.configure(bg=get_color('background'))
+
+        # 设置最小窗口大小
+        self.root.minsize(1200, 800)
 
         # 设置窗口图标（如果有的话）
         try:
@@ -91,18 +89,27 @@ class MainWindow:
         self.root.geometry(f"{width}x{height}+{x}+{y}")
 
     def create_widgets(self):
-        """创建界面组件"""
+        """创建优化后的界面组件"""
         # 1. 创建状态栏（顶部）
+        from ui.components.status_bar import StatusBar
         self.status_bar = StatusBar(self.root, self.normalized_user_info)
 
         # 2. 创建主内容区域
-        main_frame = tk.Frame(self.root, bg=get_color('background'))
-        main_frame.pack(fill='both', expand=True)
+        main_container = tk.Frame(self.root, bg=get_color('background'))
+        main_container.pack(fill='both', expand=True)
 
-        # 3. 创建左侧任务管理区域
-        left_frame = tk.Frame(main_frame, bg=get_color('background'))
-        left_frame.pack(side='left', fill='both', expand=True, padx=(10, 5), pady=10)
+        # 添加内边距容器
+        content_frame = tk.Frame(main_container, bg=get_color('background'))
+        content_frame.pack(fill='both', expand=True,
+                          padx=get_spacing('lg'), pady=get_spacing('md'))
 
+        # 3. 创建左右分栏布局
+        # 左侧任务管理区域 (40% 宽度)
+        left_frame = tk.Frame(content_frame, bg=get_color('background'))
+        left_frame.pack(side='left', fill='both', expand=True,
+                       padx=(0, get_spacing('sm')))
+
+        from ui.components.task_list_widget import TaskListWidget
         self.task_list_widget = TaskListWidget(
             left_frame,
             self.normalized_user_info,
@@ -111,10 +118,12 @@ class MainWindow:
         )
         self.task_list_widget.get_frame().pack(fill='both', expand=True)
 
-        # 4. 创建右侧端口管理区域
-        right_frame = tk.Frame(main_frame, bg=get_color('background'))
-        right_frame.pack(side='right', fill='both', expand=True, padx=(5, 10), pady=10)
+        # 右侧端口管理区域 (60% 宽度)
+        right_frame = tk.Frame(content_frame, bg=get_color('background'))
+        right_frame.pack(side='right', fill='both', expand=True,
+                        padx=(get_spacing('sm'), 0))
 
+        from ui.components.port_grid_widget import PortGridWidget
         self.port_grid_widget = PortGridWidget(
             right_frame,
             self.normalized_user_info,
@@ -122,12 +131,44 @@ class MainWindow:
         )
         self.port_grid_widget.get_frame().pack(fill='both', expand=True)
 
+        # 4. 添加底部状态信息（可选）
+        self.create_bottom_status()
+
+    def create_bottom_status(self):
+        """创建底部状态信息"""
+        bottom_frame = tk.Frame(self.root, bg=get_color('gray_light'), height=25)
+        bottom_frame.pack(fill='x', side='bottom')
+        bottom_frame.pack_propagate(False)
+
+        # 版本信息
+        version_label = tk.Label(
+            bottom_frame,
+            text="Pulsesports v1.9.0-rc.1 | 就绪",
+            font=get_font('small'),
+            fg=get_color('text_light'),
+            bg=get_color('gray_light')
+        )
+        version_label.pack(side='left', padx=get_spacing('md'), pady=get_spacing('xs'))
+
+        # 连接状态
+        self.connection_status = tk.Label(
+            bottom_frame,
+            text="🟢 已连接",
+            font=get_font('small'),
+            fg=get_color('success'),
+            bg=get_color('gray_light')
+        )
+        self.connection_status.pack(side='right', padx=get_spacing('md'), pady=get_spacing('xs'))
+
     def on_task_select(self, task):
         """任务选择回调"""
         print(f"选中任务: {task.get('title', task.get('id', 'Unknown'))}")
 
+        # 可以在这里添加任务详情显示逻辑
+        # 例如在右侧显示任务详情面板等
+
     def on_task_update(self, action, task):
-        """任务更新回调"""
+        """任务更新回调 - 处理各种任务操作"""
         try:
             if action == 'add':
                 self.show_add_task_dialog()
@@ -149,13 +190,16 @@ class MainWindow:
         port_names = [p.get('name', f"COM{p.get('id', '')}") for p in ports]
         print(f"选中端口: {port_names}")
 
+        # 可以在这里添加端口操作逻辑
+        # 例如批量操作提示等
+
     def show_add_task_dialog(self):
         """显示添加任务对话框"""
         try:
             dialog = AddTaskDialog(self.root, self.normalized_user_info)
             result = dialog.show()
             if result:
-                messagebox.showinfo("成功", "任务创建成功！")
+                self.show_success_message("任务创建成功！")
                 # 刷新任务列表
                 if self.task_list_widget:
                     self.task_list_widget.refresh_tasks()
@@ -170,7 +214,7 @@ class MainWindow:
             dialog = TaskTestDialog(self.root, task)
             result = dialog.show()
             if result:
-                messagebox.showinfo("测试完成", "任务测试完成！")
+                self.show_success_message("任务测试完成！")
         except Exception as e:
             messagebox.showerror("错误", f"打开任务测试对话框失败：{str(e)}")
 
@@ -180,7 +224,7 @@ class MainWindow:
             dialog = TaskEditDialog(self.root, task)
             result = dialog.show()
             if result:
-                messagebox.showinfo("成功", "任务内容已更新！")
+                self.show_success_message("任务内容已更新！")
                 # 刷新任务列表
                 if self.task_list_widget:
                     self.task_list_widget.refresh_tasks()
@@ -193,7 +237,7 @@ class MainWindow:
             dialog = ConfigDialog(self.root)
             result = dialog.show()
             if result:
-                messagebox.showinfo("成功", "配置已保存！")
+                self.show_success_message("配置已保存！")
         except Exception as e:
             messagebox.showerror("错误", f"打开配置对话框失败：{str(e)}")
 
@@ -203,9 +247,16 @@ class MainWindow:
             dialog = ExportDialog(self.root, task, export_type)
             result = dialog.show()
             if result:
-                messagebox.showinfo("成功", "数据导出完成！")
+                self.show_success_message("数据导出完成！")
         except Exception as e:
             messagebox.showerror("错误", f"打开导出对话框失败：{str(e)}")
+
+    def show_success_message(self, message):
+        """显示成功消息 - 可以用更好看的提示框替代"""
+        messagebox.showinfo("成功", message)
+
+        # 这里可以实现自定义的成功提示框
+        # 例如：顶部滑入的通知条、右下角的 Toast 提示等
 
     def start_timers(self):
         """启动定时器"""
@@ -239,6 +290,20 @@ class MainWindow:
         except Exception as e:
             print(f"刷新余额失败：{str(e)}")
 
+    def update_connection_status(self, connected=True):
+        """更新连接状态"""
+        if hasattr(self, 'connection_status'):
+            if connected:
+                self.connection_status.config(
+                    text="🟢 已连接",
+                    fg=get_color('success')
+                )
+            else:
+                self.connection_status.config(
+                    text="🔴 连接断开",
+                    fg=get_color('danger')
+                )
+
     def on_closing(self):
         """窗口关闭事件"""
         try:
@@ -246,7 +311,7 @@ class MainWindow:
             self.timer_manager.stop_all()
 
             # 确认关闭
-            if messagebox.askyesno("确认退出", "确定要退出系统吗？"):
+            if messagebox.askyesno("确认退出", "确定要退出 Pulsesports 系统吗？"):
                 self.destroy()
         except Exception as e:
             print(f"关闭窗口时发生错误：{str(e)}")
@@ -263,7 +328,7 @@ class MainWindow:
 
 
 def main():
-    """测试完整主窗口"""
+    """测试优化后的完整主窗口"""
     # 模拟用户信息
     user_info = {
         'operators_id': 1,
