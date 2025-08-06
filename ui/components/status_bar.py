@@ -1,5 +1,5 @@
 """
-优化后的状态栏组件 - 现代化设计
+优化后的状态栏组件 - 去除头像，右对齐用户信息和积分
 """
 
 import tkinter as tk
@@ -41,10 +41,7 @@ class StatusBar:
         # 左侧：Logo和标题区域
         self.create_left_section(content_frame)
 
-        # 中间：用户信息区域
-        self.create_center_section(content_frame)
-
-        # 右侧：余额和时间区域
+        # 右侧：用户信息和积分区域（合并到一起）
         self.create_right_section(content_frame)
 
     def create_left_section(self, parent):
@@ -90,74 +87,80 @@ class StatusBar:
         )
         subtitle_label.pack(anchor='w')
 
-    def create_center_section(self, parent):
-        """创建中间用户信息区域"""
-        center_frame = tk.Frame(parent, bg=get_color('primary'))
-        center_frame.pack(side='left', expand=True, fill='both', padx=get_spacing('xl'))
-
-        if self.user_info.get('username'):
-            # 用户信息容器
-            user_container = tk.Frame(center_frame, bg=get_color('primary'))
-            user_container.pack(expand=True)
-
-            # 用户头像占位符
-            avatar_frame = tk.Frame(
-                user_container,
-                bg='white',
-                width=36,
-                height=36,
-                relief='solid',
-                bd=1
-            )
-            avatar_frame.pack(side='left', pady=get_spacing('xs'))
-            avatar_frame.pack_propagate(False)
-
-            # 头像图标
-            avatar_icon = tk.Label(
-                avatar_frame,
-                text="👤",
-                font=('Microsoft YaHei', 16),
-                fg=get_color('primary'),
-                bg='white'
-            )
-            avatar_icon.pack(expand=True)
-
-            # 用户信息文字
-            user_info_frame = tk.Frame(user_container, bg=get_color('primary'))
-            user_info_frame.pack(side='left', padx=(get_spacing('sm'), 0), fill='y')
-
-            # 用户名
-            user_label = tk.Label(
-                user_info_frame,
-                text=f"欢迎，{self.user_info.get('real_name', self.user_info['username'])}",
-                font=get_font('button'),
-                fg='white',
-                bg=get_color('primary')
-            )
-            user_label.pack(anchor='w')
-
-            # 在线状态
-            status_label = tk.Label(
-                user_info_frame,
-                text="● 在线",
-                font=get_font('small'),
-                fg='#4CAF50',
-                bg=get_color('primary')
-            )
-            status_label.pack(anchor='w')
-
     def create_right_section(self, parent):
-        """创建右侧余额和时间区域"""
+        """创建右侧用户信息和积分区域 - 去除头像，右对齐"""
         right_frame = tk.Frame(parent, bg=get_color('primary'))
         right_frame.pack(side='right', fill='y')
 
-        # 信息容器
+        # 信息容器 - 垂直布局
         info_container = tk.Frame(right_frame, bg=get_color('primary'))
         info_container.pack(side='right', pady=get_spacing('sm'))
 
-        # 时间显示
+        # 用户信息行
+        if self.user_info.get('username'):
+            user_frame = tk.Frame(info_container, bg=get_color('primary'))
+            user_frame.pack(anchor='e', pady=(0, get_spacing('xs')))
+
+            # 在线状态指示器
+            status_indicator = tk.Label(
+                user_frame,
+                text="● ",
+                font=('Microsoft YaHei', 10),
+                fg='#4CAF50',  # 绿色在线状态
+                bg=get_color('primary')
+            )
+            status_indicator.pack(side='left')
+
+            # 用户信息
+            user_text = f"欢迎，{self.user_info.get('real_name', self.user_info['username'])}"
+            user_label = tk.Label(
+                user_frame,
+                text=user_text,
+                font=get_font('medium'),  # 使用中等字体，更清晰
+                fg='white',
+                bg=get_color('primary')
+            )
+            user_label.pack(side='left')
+
+        # 积分信息行 - 使用更大更清晰的样式
+        balance_frame = tk.Frame(info_container, bg=get_color('primary'))
+        balance_frame.pack(anchor='e')
+
+        # 积分徽章容器 - 增大尺寸，提高可读性
+        badge_container = tk.Frame(
+            balance_frame,
+            bg='white',
+            relief='flat',
+            bd=0,
+            padx=get_spacing('lg'),  # 增大内边距
+            pady=get_spacing('sm')
+        )
+        badge_container.pack()
+
+        # 积分图标
+        balance_icon = tk.Label(
+            badge_container,
+            text="💰",
+            font=('Microsoft YaHei', 14),  # 增大图标
+            fg=get_color('warning'),
+            bg='white'
+        )
+        balance_icon.pack(side='left')
+
+        # 积分文字 - 使用更大更醒目的字体
+        current_balance = self.user_info.get('balance', 10000)
+        self.balance_label = tk.Label(
+            badge_container,
+            text=f"积分: {current_balance:,}",  # 格式化数字，添加千位分隔符
+            font=('Microsoft YaHei', 12, 'bold'),  # 使用更大的粗体字体
+            fg=get_color('text'),
+            bg='white'
+        )
+        self.balance_label.pack(side='left', padx=(get_spacing('sm'), 0))
+
+        # 时间信息行 - 小字显示在最下方
         time_frame = tk.Frame(info_container, bg=get_color('primary'))
-        time_frame.pack(anchor='e', pady=(0, get_spacing('xs')))
+        time_frame.pack(anchor='e', pady=(get_spacing('xs'), 0))
 
         self.time_label = tk.Label(
             time_frame,
@@ -167,41 +170,6 @@ class StatusBar:
             bg=get_color('primary')
         )
         self.time_label.pack(side='right')
-
-        # 余额显示 - 徽章样式
-        balance_frame = tk.Frame(info_container, bg=get_color('primary'))
-        balance_frame.pack(anchor='e')
-
-        # 余额徽章容器
-        badge_container = tk.Frame(
-            balance_frame,
-            bg='white',
-            relief='flat',
-            bd=0,
-            padx=get_spacing('md'),
-            pady=get_spacing('xs')
-        )
-        badge_container.pack()
-
-        # 余额图标
-        balance_icon = tk.Label(
-            badge_container,
-            text="💰",
-            font=('Microsoft YaHei', 12),
-            fg=get_color('warning'),
-            bg='white'
-        )
-        balance_icon.pack(side='left')
-
-        # 余额文字
-        self.balance_label = tk.Label(
-            badge_container,
-            text=f"积分 {self.user_info.get('balance', 10000):,}",
-            font=get_font('button'),
-            fg=get_color('text'),
-            bg='white'
-        )
-        self.balance_label.pack(side='left', padx=(get_spacing('xs'), 0))
 
     def get_current_time(self):
         """获取当前时间"""
@@ -221,8 +189,9 @@ class StatusBar:
         update_time()
 
     def update_balance(self, balance):
-        """更新余额显示"""
-        self.balance_label.config(text=f"积分 {balance:,}")
+        """更新余额显示 - 确保格式化显示"""
+        if hasattr(self, 'balance_label'):
+            self.balance_label.config(text=f"积分: {balance:,}")
 
     def update_user_info(self, user_info):
         """更新用户信息"""
@@ -248,7 +217,7 @@ def main():
     user_info = {
         'username': 'test_operator',
         'real_name': '测试操作员',
-        'balance': 15680
+        'balance': 156800  # 使用更大的数字测试格式化效果
     }
 
     # 创建状态栏
@@ -257,11 +226,23 @@ def main():
     # 测试更新余额
     def update_balance():
         import random
-        new_balance = random.randint(5000, 50000)
+        new_balance = random.randint(50000, 500000)
         status_bar.update_balance(new_balance)
+        print(f"更新积分为: {new_balance:,}")
         root.after(3000, update_balance)
 
     root.after(3000, update_balance)
+
+    # 显示说明
+    info_label = tk.Label(
+        root,
+        text="✅ 优化项目:\n• 去除了头像\n• 用户信息和积分右对齐\n• 积分数字更大更清晰\n• 添加千位分隔符\n• 在线状态指示器",
+        font=get_font('default'),
+        fg=get_color('text'),
+        bg=get_color('background'),
+        justify='left'
+    )
+    info_label.pack(pady=20)
 
     root.mainloop()
 

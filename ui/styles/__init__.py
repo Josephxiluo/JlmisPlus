@@ -1,9 +1,9 @@
 """
-样式配置模块 - 最终优化版本，确保所有按钮文字高对比度清晰可见
+样式配置模块 - 修复按钮文字对比度问题
 """
 import tkinter as tk
 
-# 现代化橙色主题配置 - 最终版本
+# 现代化橙色主题配置 - 优化版本
 ORANGE_THEME = {
     'colors': {
         'primary': '#FF7043',      # 现代橙色
@@ -31,12 +31,13 @@ ORANGE_THEME = {
         'grid_line': '#F5F5F5',    # 网格线色
     },
     'fonts': {
-        'default': ('Microsoft YaHei', 9),
+        'default': ('Microsoft YaHei', 10),      # 增大默认字体
         'title': ('Microsoft YaHei', 14, 'bold'),
         'subtitle': ('Microsoft YaHei', 12, 'bold'),
-        'button': ('Microsoft YaHei', 9, 'bold'),
-        'small': ('Microsoft YaHei', 8),
+        'button': ('Microsoft YaHei', 10, 'bold'), # 增大按钮字体
+        'small': ('Microsoft YaHei', 9),          # 增大小字体
         'large': ('Microsoft YaHei', 16, 'bold'),
+        'medium': ('Microsoft YaHei', 11),        # 新增中等字体
     },
     'spacing': {
         'xs': 4,    # 小间距
@@ -80,63 +81,63 @@ def create_shadow_frame(parent, **kwargs):
     return shadow_frame, content_frame
 
 def create_modern_button(parent, text, style="primary", command=None, width=None, **kwargs):
-    """创建现代化按钮 - 最终版本，确保所有按钮文字高对比度清晰可见"""
+    """创建现代化按钮 - 修复灰色按钮文字对比度问题"""
 
-    # 最终确定的按钮样式配置 - 所有按钮都有高对比度
+    # 修复后的按钮样式配置 - 重点修复灰色按钮
     styles = {
         'primary': {
             'bg': get_color('primary'),           # 橙色背景
-            'fg': 'white',                        # 白色文字 ✅
+            'fg': 'white',                        # 白色文字
             'active_bg': get_color('primary_dark'),
             'hover_bg': get_color('primary_hover'),
             'border_color': get_color('primary_dark')
         },
         'secondary': {
             'bg': 'white',                        # 白色背景
-            'fg': get_color('text'),              # 深色文字 #212121 ✅
+            'fg': get_color('text'),              # 深色文字 #212121
             'active_bg': get_color('border'),
             'hover_bg': get_color('hover_bg'),
             'border_color': get_color('border')
         },
         'success': {
             'bg': get_color('success'),           # 绿色背景
-            'fg': 'white',                        # 白色文字 ✅
+            'fg': 'white',                        # 白色文字
             'active_bg': '#388E3C',
             'hover_bg': '#45A049',
             'border_color': get_color('success')
         },
         'danger': {
             'bg': get_color('danger'),            # 红色背景
-            'fg': 'white',                        # 白色文字 ✅
+            'fg': 'white',                        # 白色文字
             'active_bg': '#D32F2F',
             'hover_bg': '#E53935',
             'border_color': get_color('danger')
         },
         'warning': {
             'bg': get_color('warning'),           # 橙色背景
-            'fg': 'white',                        # 白色文字 ✅
+            'fg': 'white',                        # 白色文字
             'active_bg': '#F57C00',
             'hover_bg': '#FB8C00',
             'border_color': get_color('warning')
         },
         'gray': {
             'bg': get_color('gray_light'),        # 浅灰背景 #EEEEEE
-            'fg': get_color('text'),              # 深色文字 #212121 ✅ 高对比度
+            'fg': '#000000',                      # 修改为纯黑色文字，确保高对比度 ✅
             'active_bg': get_color('border'),
             'hover_bg': '#E0E0E0',
             'border_color': get_color('border')
         },
         'outline': {
             'bg': 'white',                        # 白色背景
-            'fg': get_color('primary'),           # 橙色文字 ✅
+            'fg': get_color('primary'),           # 橙色文字
             'active_bg': get_color('hover_bg'),
             'hover_bg': get_color('primary_light'),
             'border_color': get_color('primary')
         },
-        # 可选的灰色按钮变体 - 橙色文字版本
-        'gray_orange': {
+        # 黄色文字版本的灰色按钮（可选）
+        'gray_yellow': {
             'bg': get_color('gray_light'),        # 浅灰背景
-            'fg': get_color('primary'),           # 橙色文字 ✅ 品牌感
+            'fg': '#F57F17',                      # 深黄色文字（高对比度）
             'active_bg': get_color('border'),
             'hover_bg': '#E0E0E0',
             'border_color': get_color('primary')
@@ -145,20 +146,20 @@ def create_modern_button(parent, text, style="primary", command=None, width=None
 
     button_style = styles.get(style, styles['primary'])
 
-    # 创建按钮，确保有清晰的边框
+    # 创建按钮
     button = tk.Button(
         parent,
         text=text,
         font=get_font('button'),
         bg=button_style['bg'],
         fg=button_style['fg'],
-        relief='solid',                    # 实线边框
-        bd=1,                             # 1像素边框
+        relief='solid',
+        bd=1,
         cursor='hand2',
         command=command,
-        highlightthickness=0,             # 去除焦点边框
-        padx=12,                          # 水平内边距
-        pady=6,                           # 垂直内边距
+        highlightthickness=0,
+        padx=12,
+        pady=6,
         **kwargs
     )
 
@@ -168,7 +169,6 @@ def create_modern_button(parent, text, style="primary", command=None, width=None
     # 添加悬停效果
     def on_enter(event):
         button.config(bg=button_style['hover_bg'])
-        # outline 样式悬停时改变文字颜色
         if style == 'outline':
             button.config(fg='white')
 
@@ -224,7 +224,7 @@ def create_card_frame(parent, title=None, **kwargs):
             header_frame,
             text=title,
             font=get_font('subtitle'),
-            fg=get_color('text'),          # 确保标题文字清晰
+            fg=get_color('text'),
             bg=get_color('primary_light')
         )
         title_label.pack(side='left', padx=get_spacing('md'), pady=get_spacing('sm'))
@@ -238,7 +238,7 @@ def create_card_frame(parent, title=None, **kwargs):
     return card_container, card_frame
 
 def create_status_badge(parent, text, status_type="info"):
-    """创建状态徽章 - 确保高对比度"""
+    """创建状态徽章"""
     colors = {
         'success': {'bg': get_color('success'), 'fg': 'white'},
         'warning': {'bg': get_color('warning'), 'fg': 'white'},
@@ -255,7 +255,7 @@ def create_status_badge(parent, text, status_type="info"):
         text=text,
         font=get_font('small'),
         bg=color['bg'],
-        fg=color['fg'],                    # 确保文字颜色对比度
+        fg=color['fg'],
         padx=8,
         pady=2,
         relief='flat'
@@ -287,113 +287,53 @@ def create_button_group(parent, buttons_config, orientation='horizontal'):
 
     return container
 
-# 测试按钮样式的演示函数
-def test_button_styles():
-    """测试最终的按钮样式效果"""
-    root = tk.Tk()
-    root.title("Pulsesports - 最终按钮样式测试")
-    root.geometry("900x700")
-    root.configure(bg=get_color('background'))
-
-    # 标题
-    title = tk.Label(
-        root,
-        text="🎨 Pulsesports 最终按钮样式",
-        font=get_font('large'),
-        fg=get_color('primary'),
-        bg=get_color('background')
+def create_resizable_paned_window(parent, orientation='horizontal'):
+    """创建可调整大小的分割窗口"""
+    paned_window = tk.PanedWindow(
+        parent,
+        orient=tk.HORIZONTAL if orientation == 'horizontal' else tk.VERTICAL,
+        bg=get_color('background'),
+        sashwidth=6,
+        sashrelief='flat',
+        showhandle=True,
+        handlesize=8,
+        handlepad=20,
+        sashpad=2,
+        relief='flat',
+        bd=0
     )
-    title.pack(pady=20)
-
-    # 主容器
-    main_frame = tk.Frame(root, bg=get_color('card_bg'), relief='solid', bd=1)
-    main_frame.pack(fill='both', expand=True, padx=20, pady=10)
-
-    content_frame = tk.Frame(main_frame, bg=get_color('card_bg'))
-    content_frame.pack(fill='both', expand=True, padx=20, pady=20)
-
-    # 1. 基础按钮
-    tk.Label(content_frame, text="基础按钮:", font=get_font('subtitle'),
-             fg=get_color('text'), bg=get_color('card_bg')).pack(anchor='w')
-
-    basic_frame = tk.Frame(content_frame, bg=get_color('card_bg'))
-    basic_frame.pack(pady=10)
-
-    create_modern_button(basic_frame, "主要操作", "primary", width=12).pack(side='left', padx=5)
-    create_modern_button(basic_frame, "次要操作", "secondary", width=12).pack(side='left', padx=5)
-    create_modern_button(basic_frame, "轮廓按钮", "outline", width=12).pack(side='left', padx=5)
-
-    # 2. 状态按钮
-    tk.Label(content_frame, text="状态按钮:", font=get_font('subtitle'),
-             fg=get_color('text'), bg=get_color('card_bg')).pack(anchor='w', pady=(20, 0))
-
-    status_frame = tk.Frame(content_frame, bg=get_color('card_bg'))
-    status_frame.pack(pady=10)
-
-    create_modern_button(status_frame, "✓ 成功", "success", width=12).pack(side='left', padx=5)
-    create_modern_button(status_frame, "⚠ 警告", "warning", width=12).pack(side='left', padx=5)
-    create_modern_button(status_frame, "✗ 危险", "danger", width=12).pack(side='left', padx=5)
-
-    # 3. 灰色按钮（重点测试）
-    tk.Label(content_frame, text="灰色按钮方案:", font=get_font('subtitle'),
-             fg=get_color('text'), bg=get_color('card_bg')).pack(anchor='w', pady=(20, 0))
-
-    gray_frame = tk.Frame(content_frame, bg=get_color('card_bg'))
-    gray_frame.pack(pady=10)
-
-    create_modern_button(gray_frame, "取消", "gray", width=10).pack(side='left', padx=5)
-    tk.Label(gray_frame, text="← 推荐方案：浅灰底+深色字",
-             fg=get_color('success'), bg=get_color('card_bg')).pack(side='left', padx=10)
-
-    # 可选的橙色文字版本
-    create_modern_button(gray_frame, "取消", "gray_orange", width=10).pack(side='left', padx=(30, 5))
-    tk.Label(gray_frame, text="← 可选：浅灰底+橙色字",
-             fg=get_color('primary'), bg=get_color('card_bg')).pack(side='left', padx=10)
-
-    # 4. 功能按钮
-    tk.Label(content_frame, text="功能按钮:", font=get_font('subtitle'),
-             fg=get_color('text'), bg=get_color('card_bg')).pack(anchor='w', pady=(20, 0))
-
-    func_frame = tk.Frame(content_frame, bg=get_color('card_bg'))
-    func_frame.pack(pady=10)
-
-    create_icon_button(func_frame, "➕", "添加任务", "primary", width=12).pack(side='left', padx=3)
-    create_icon_button(func_frame, "▶", "启动", "success", width=8).pack(side='left', padx=3)
-    create_icon_button(func_frame, "⏸", "暂停", "warning", width=8).pack(side='left', padx=3)
-    create_icon_button(func_frame, "⏹", "停止", "gray", width=8).pack(side='left', padx=3)
-    create_icon_button(func_frame, "🗑", "删除", "danger", width=8).pack(side='left', padx=3)
-
-    # 5. 实际场景演示
-    tk.Label(content_frame, text="实际使用场景:", font=get_font('subtitle'),
-             fg=get_color('text'), bg=get_color('card_bg')).pack(anchor='w', pady=(20, 0))
-
-    # 对话框场景
-    dialog_demo = tk.Frame(content_frame, bg=get_color('gray_light'), relief='solid', bd=1)
-    dialog_demo.pack(fill='x', pady=10)
-
-    dialog_content = tk.Frame(dialog_demo, bg=get_color('gray_light'))
-    dialog_content.pack(padx=15, pady=15)
-
-    tk.Label(dialog_content, text="确定要删除这个任务吗？",
-             font=get_font('default'), fg=get_color('text'), bg=get_color('gray_light')).pack(pady=(0, 10))
-
-    dialog_buttons = tk.Frame(dialog_content, bg=get_color('gray_light'))
-    dialog_buttons.pack()
-
-    create_modern_button(dialog_buttons, "确定删除", "danger", width=10).pack(side='left', padx=5)
-    create_modern_button(dialog_buttons, "取消", "gray", width=10).pack(side='left', padx=5)
-
-    # 说明
-    note = tk.Label(
-        content_frame,
-        text="✅ 所有按钮文字都清晰可见，对比度符合可访问性标准！",
-        font=get_font('default'),
-        fg=get_color('success'),
-        bg=get_color('card_bg')
-    )
-    note.pack(pady=20)
-
-    root.mainloop()
+    return paned_window
 
 if __name__ == "__main__":
-    test_button_styles()
+    # 测试优化后的按钮样式
+    root = tk.Tk()
+    root.title("按钮样式测试 - 修复对比度问题")
+    root.geometry("600x300")
+    root.configure(bg=get_color('background'))
+
+    main_frame = tk.Frame(root, bg=get_color('card_bg'), relief='solid', bd=1)
+    main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+    tk.Label(main_frame, text="修复后的灰色按钮样式:", font=get_font('subtitle'),
+             fg=get_color('text'), bg=get_color('card_bg')).pack(pady=10)
+
+    button_frame = tk.Frame(main_frame, bg=get_color('card_bg'))
+    button_frame.pack(pady=10)
+
+    # 测试灰色按钮（黑色文字版本）
+    create_modern_button(button_frame, "清除全部记录", "gray", width=12).pack(side='left', padx=5)
+    create_modern_button(button_frame, "清除当前记录", "gray", width=12).pack(side='left', padx=5)
+    create_modern_button(button_frame, "停止端口", "gray", width=10).pack(side='left', padx=5)
+
+    # 测试黄色文字版本（可选）
+    button_frame2 = tk.Frame(main_frame, bg=get_color('card_bg'))
+    button_frame2.pack(pady=10)
+
+    create_modern_button(button_frame2, "清除全部记录", "gray_yellow", width=12).pack(side='left', padx=5)
+    create_modern_button(button_frame2, "清除当前记录", "gray_yellow", width=12).pack(side='left', padx=5)
+    create_modern_button(button_frame2, "停止端口", "gray_yellow", width=10).pack(side='left', padx=5)
+
+    tk.Label(main_frame, text="✅ 黑色文字版本（推荐） | ⚠️ 黄色文字版本（可选）",
+             fg=get_color('success'), bg=get_color('card_bg')).pack(pady=10)
+
+    root.mainloop()

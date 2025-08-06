@@ -1,5 +1,5 @@
 """
-优化后的完整主窗口 - 现代化设计集成
+优化后的主窗口 - 添加可调整大小的分割窗口
 """
 import tkinter as tk
 from tkinter import messagebox
@@ -11,7 +11,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 导入优化后的UI组件
-from ui.styles import get_color, get_font, get_spacing
+from ui.styles import get_color, get_font, get_spacing, create_resizable_paned_window
 from ui.components.timer_widget import TimerWidget, TimerManager
 
 # 导入对话框
@@ -23,7 +23,7 @@ from ui.dialogs.export_dialog import ExportDialog
 
 
 class MainWindow:
-    """优化后的完整主窗口类"""
+    """优化后的主窗口类 - 支持左右分割窗口调整"""
 
     def __init__(self, user_info: Dict[str, Any]):
         """初始化主窗口"""
@@ -94,7 +94,7 @@ class MainWindow:
         from ui.components.status_bar import StatusBar
         self.status_bar = StatusBar(self.root, self.normalized_user_info)
 
-        # 2. 创建主内容区域
+        # 2. 创建主内容区域容器
         main_container = tk.Frame(self.root, bg=get_color('background'))
         main_container.pack(fill='both', expand=True)
 
@@ -103,36 +103,57 @@ class MainWindow:
         content_frame.pack(fill='both', expand=True,
                           padx=get_spacing('lg'), pady=get_spacing('md'))
 
-        # 3. 创建左右分栏布局
-        # 左侧任务管理区域 (40% 宽度)
-        left_frame = tk.Frame(content_frame, bg=get_color('background'))
-        left_frame.pack(side='left', fill='both', expand=True,
-                       padx=(0, get_spacing('sm')))
+        # 3. 创建可调整大小的分割窗口
+        self.paned_window = create_resizable_paned_window(content_frame, orientation='horizontal')
+        self.paned_window.pack(fill='both', expand=True)
+
+        # 4. 创建左侧任务管理区域
+        left_container = tk.Frame(self.paned_window, bg=get_color('background'))
 
         from ui.components.task_list_widget import TaskListWidget
         self.task_list_widget = TaskListWidget(
-            left_frame,
+            left_container,
             self.normalized_user_info,
             on_task_select=self.on_task_select,
             on_task_update=self.on_task_update
         )
         self.task_list_widget.get_frame().pack(fill='both', expand=True)
 
-        # 右侧端口管理区域 (60% 宽度)
-        right_frame = tk.Frame(content_frame, bg=get_color('background'))
-        right_frame.pack(side='right', fill='both', expand=True,
-                        padx=(get_spacing('sm'), 0))
+        # 5. 创建右侧端口管理区域
+        right_container = tk.Frame(self.paned_window, bg=get_color('background'))
 
         from ui.components.port_grid_widget import PortGridWidget
         self.port_grid_widget = PortGridWidget(
-            right_frame,
+            right_container,
             self.normalized_user_info,
             on_port_select=self.on_port_select
         )
         self.port_grid_widget.get_frame().pack(fill='both', expand=True)
 
-        # 4. 添加底部状态信息（可选）
+        # 6. 将左右容器添加到分割窗口
+        self.paned_window.add(left_container, minsize=400)  # 左侧最小宽度400px
+        self.paned_window.add(right_container, minsize=600)  # 右侧最小宽度600px
+
+        # 7. 设置初始分割比例（左侧40%，右侧60%）
+        self.root.after(100, self.set_initial_sash_position)
+
+        # 8. 添加底部状态信息
         self.create_bottom_status()
+
+    def set_initial_sash_position(self):
+        """设置初始分割条位置"""
+        try:
+            # 获取窗口宽度
+            total_width = self.paned_window.winfo_width()
+            if total_width > 100:  # 确保窗口已经完全加载
+                # 设置左侧占40%
+                left_width = int(total_width * 0.4)
+                self.paned_window.sash_place(0, left_width, 0)
+            else:
+                # 如果窗口还没完全加载，延迟执行
+                self.root.after(100, self.set_initial_sash_position)
+        except:
+            pass
 
     def create_bottom_status(self):
         """创建底部状态信息"""
@@ -150,6 +171,16 @@ class MainWindow:
         )
         version_label.pack(side='left', padx=get_spacing('md'), pady=get_spacing('xs'))
 
+        # 分割窗口提示信息
+        resize_hint = tk.Label(
+            bottom_frame,
+            text="💡 可拖拽中间分割线调整左右窗口大小",
+            font=get_font('small'),
+            fg=get_color('primary'),
+            bg=get_color('gray_light')
+        )
+        resize_hint.pack(side='left', padx=get_spacing('lg'))
+
         # 连接状态
         self.connection_status = tk.Label(
             bottom_frame,
@@ -163,9 +194,6 @@ class MainWindow:
     def on_task_select(self, task):
         """任务选择回调"""
         print(f"选中任务: {task.get('title', task.get('id', 'Unknown'))}")
-
-        # 可以在这里添加任务详情显示逻辑
-        # 例如在右侧显示任务详情面板等
 
     def on_task_update(self, action, task):
         """任务更新回调 - 处理各种任务操作"""
@@ -189,9 +217,6 @@ class MainWindow:
         """端口选择回调"""
         port_names = [p.get('name', f"COM{p.get('id', '')}") for p in ports]
         print(f"选中端口: {port_names}")
-
-        # 可以在这里添加端口操作逻辑
-        # 例如批量操作提示等
 
     def show_add_task_dialog(self):
         """显示添加任务对话框"""
@@ -252,11 +277,8 @@ class MainWindow:
             messagebox.showerror("错误", f"打开导出对话框失败：{str(e)}")
 
     def show_success_message(self, message):
-        """显示成功消息 - 可以用更好看的提示框替代"""
+        """显示成功消息"""
         messagebox.showinfo("成功", message)
-
-        # 这里可以实现自定义的成功提示框
-        # 例如：顶部滑入的通知条、右下角的 Toast 提示等
 
     def start_timers(self):
         """启动定时器"""
@@ -282,8 +304,6 @@ class MainWindow:
     def refresh_balance(self):
         """刷新用户余额"""
         try:
-            # 这里应该调用用户服务获取最新余额
-            # 暂时保持现有余额
             if self.status_bar:
                 current_balance = self.normalized_user_info.get('balance', 10000)
                 self.status_bar.update_balance(current_balance)
@@ -328,13 +348,13 @@ class MainWindow:
 
 
 def main():
-    """测试优化后的完整主窗口"""
+    """测试优化后的主窗口"""
     # 模拟用户信息
     user_info = {
         'operators_id': 1,
         'operators_username': 'test_operator',
         'operators_real_name': '测试操作员',
-        'operators_available_credits': 10000,
+        'operators_available_credits': 156800,
         'channel_users_id': 1
     }
 

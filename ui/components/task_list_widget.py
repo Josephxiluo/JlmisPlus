@@ -1,5 +1,5 @@
 """
-优化后的任务列表组件 - 卡片式设计
+优化后的任务列表组件 - 增大字体和改进布局
 """
 
 import tkinter as tk
@@ -22,34 +22,34 @@ except ImportError:
             """模拟获取用户任务"""
             mock_tasks = [
                 {
-                    'id': 1,
-                    'title': '测试任务1',
-                    'status': 'running',
+                    'id': 'v342',
+                    'title': 'v342',
+                    'status': 'stopped',
                     'total': 100,
-                    'sent': 35,
-                    'success_count': 30,
-                    'failed_count': 5,
-                    'progress': 35.0
+                    'sent': 0,
+                    'success_count': 0,
+                    'failed_count': 0,
+                    'progress': 0.0
                 },
                 {
-                    'id': 2,
-                    'title': '测试任务2',
-                    'status': 'paused',
+                    'id': 'v365',
+                    'title': 'v365',
+                    'status': 'stopped',
                     'total': 200,
-                    'sent': 55,
-                    'success_count': 50,
-                    'failed_count': 5,
-                    'progress': 27.5
+                    'sent': 0,
+                    'success_count': 0,
+                    'failed_count': 0,
+                    'progress': 0.0
                 },
                 {
-                    'id': 3,
-                    'title': '测试任务3',
-                    'status': 'completed',
+                    'id': 'v378',
+                    'title': 'v378',
+                    'status': 'stopped',
                     'total': 150,
-                    'sent': 150,
-                    'success_count': 148,
-                    'failed_count': 2,
-                    'progress': 100.0
+                    'sent': 0,
+                    'success_count': 0,
+                    'failed_count': 0,
+                    'progress': 0.0
                 }
             ]
             return {
@@ -84,7 +84,7 @@ except ImportError:
 
 
 class TaskListWidget:
-    """优化后的任务列表组件"""
+    """优化后的任务列表组件 - 增大字体和改进布局"""
 
     def __init__(self, parent, user_info, on_task_select=None, on_task_update=None):
         self.parent = parent
@@ -94,7 +94,7 @@ class TaskListWidget:
         self.task_service = TaskService()
         self.selected_task = None
         self.tasks = []
-        self.task_cards = {}  # 存储任务卡片
+        self.task_items = {}  # 存储任务项
         self.create_widgets()
         self.load_tasks()
 
@@ -106,27 +106,30 @@ class TaskListWidget:
         # 创建头部控制区域
         self.create_header()
 
-        # 创建任务卡片区域
-        self.create_task_cards_area()
+        # 创建列表头部
+        self.create_list_header()
+
+        # 创建任务列表区域
+        self.create_task_list_area()
 
     def create_header(self):
-        """创建优化后的头部控制区域"""
+        """创建头部控制区域"""
         header_frame = tk.Frame(self.content_frame, bg=get_color('card_bg'))
         header_frame.pack(fill='x', padx=get_spacing('sm'), pady=(get_spacing('sm'), 0))
 
-        # 按钮容器 - 两行布局
+        # 按钮容器
         button_container = tk.Frame(header_frame, bg=get_color('card_bg'))
         button_container.pack(fill='x')
 
-        # 第一行按钮
-        button_row1 = tk.Frame(button_container, bg=get_color('card_bg'))
-        button_row1.pack(fill='x', pady=(0, get_spacing('xs')))
+        # 左侧控制按钮
+        left_buttons = tk.Frame(button_container, bg=get_color('card_bg'))
+        left_buttons.pack(side='left')
 
         # 停止发送按钮
         self.stop_button = create_modern_button(
-            button_row1,
+            left_buttons,
             text="⏹ 停止发送",
-            style="gray",
+            style="gray",  # 使用修复后的灰色样式（黑色文字）
             command=self.stop_sending,
             width=10
         )
@@ -134,7 +137,7 @@ class TaskListWidget:
 
         # 添加任务按钮
         self.add_button = create_modern_button(
-            button_row1,
+            left_buttons,
             text="➕ 添加任务",
             style="primary",
             command=self.add_task,
@@ -144,34 +147,72 @@ class TaskListWidget:
 
         # 更多操作按钮
         self.more_button = create_modern_button(
-            button_row1,
-            text="⚙ 更多",
+            left_buttons,
+            text="▼ 更多",
             style="secondary",
             command=self.show_more_menu,
             width=8
         )
         self.more_button.pack(side='left')
 
-    def create_task_cards_area(self):
-        """创建任务卡片区域"""
-        # 滚动区域容器
-        scroll_container = tk.Frame(self.content_frame, bg=get_color('card_bg'))
-        scroll_container.pack(fill='both', expand=True, padx=get_spacing('sm'), pady=get_spacing('sm'))
+    def create_list_header(self):
+        """创建列表头部"""
+        header_frame = tk.Frame(self.content_frame, bg=get_color('primary_light'))
+        header_frame.pack(fill='x', padx=get_spacing('sm'), pady=(get_spacing('sm'), 0))
+
+        # 表头容器 - 增加高度
+        header_container = tk.Frame(header_frame, bg=get_color('primary_light'), height=35)
+        header_container.pack(fill='x', padx=get_spacing('sm'), pady=get_spacing('sm'))
+        header_container.pack_propagate(False)
+
+        # 列标题定义
+        columns = [
+            ("任务", 20),      # 任务名称列，占20%宽度
+            ("进度", 15),      # 进度列，占15%宽度
+            ("成功", 10),      # 成功数列，占10%宽度
+            ("失败", 10),      # 失败数列，占10%宽度
+            ("状态", 15),      # 状态列，占15%宽度
+            ("操作", 30)       # 操作列，占30%宽度
+        ]
+
+        # 创建表头
+        for col_name, width_percent in columns:
+            col_frame = tk.Frame(header_container, bg=get_color('primary_light'))
+            col_frame.pack(side='left', fill='both', expand=True if width_percent >= 20 else False)
+
+            if width_percent < 20:
+                col_frame.config(width=width_percent * 8)  # 近似宽度控制
+
+            header_label = tk.Label(
+                col_frame,
+                text=col_name,
+                font=get_font('medium'),  # 使用中等字体，更清晰
+                fg=get_color('text'),
+                bg=get_color('primary_light'),
+                anchor='center' if col_name in ['进度', '成功', '失败', '状态'] else 'w'
+            )
+            header_label.pack(fill='both', expand=True, padx=get_spacing('xs'))
+
+    def create_task_list_area(self):
+        """创建任务列表区域"""
+        # 列表容器
+        list_container = tk.Frame(self.content_frame, bg=get_color('card_bg'))
+        list_container.pack(fill='both', expand=True, padx=get_spacing('sm'), pady=get_spacing('sm'))
 
         # 创建滚动框架
         self.canvas = tk.Canvas(
-            scroll_container,
-            bg=get_color('card_bg'),
+            list_container,
+            bg=get_color('white'),
             highlightthickness=0
         )
 
         self.scrollbar = ttk.Scrollbar(
-            scroll_container,
+            list_container,
             orient="vertical",
             command=self.canvas.yview
         )
 
-        self.scrollable_frame = tk.Frame(self.canvas, bg=get_color('card_bg'))
+        self.scrollable_frame = tk.Frame(self.canvas, bg=get_color('white'))
 
         self.scrollable_frame.bind(
             "<Configure>",
@@ -195,143 +236,149 @@ class TaskListWidget:
     def load_tasks(self):
         """加载任务列表"""
         try:
-            # 清空现有卡片
+            # 清空现有项目
             for widget in self.scrollable_frame.winfo_children():
                 widget.destroy()
-            self.task_cards.clear()
+            self.task_items.clear()
 
             # 获取用户任务
             result = self.task_service.get_user_tasks(self.user_info.get('operators_id', 1))
             if result['success']:
                 self.tasks = result['tasks']
 
-                # 创建任务卡片
+                # 创建任务列表项
                 for i, task in enumerate(self.tasks):
-                    self.create_task_card(task, i)
+                    self.create_task_item(task, i)
 
         except Exception as e:
             messagebox.showerror("错误", f"加载任务列表失败：{str(e)}")
 
-    def create_task_card(self, task, index):
-        """创建单个任务卡片"""
+    def create_task_item(self, task, index):
+        """创建单个任务项 - 增大字体和行高"""
         task_id = task.get('id')
 
-        # 任务卡片容器
-        card_frame = tk.Frame(
+        # 任务行容器 - 增加高度
+        row_frame = tk.Frame(
             self.scrollable_frame,
             bg=get_color('white'),
-            relief='solid',
-            bd=1,
+            relief='flat',
+            bd=0,
+            highlightthickness=1,
             highlightbackground=get_color('border_light'),
-            highlightthickness=1
+            height=45  # 增加行高
         )
-        card_frame.pack(fill='x', pady=get_spacing('xs'), padx=get_spacing('xs'))
+        row_frame.pack(fill='x', pady=2, padx=2)
+        row_frame.pack_propagate(False)  # 保持固定高度
 
-        # 内容容器
-        content_container = tk.Frame(card_frame, bg=get_color('white'))
-        content_container.pack(fill='both', expand=True, padx=get_spacing('md'), pady=get_spacing('md'))
+        # 行内容容器
+        content_container = tk.Frame(row_frame, bg=get_color('white'))
+        content_container.pack(fill='both', expand=True, padx=get_spacing('sm'), pady=get_spacing('sm'))
 
-        # 头部：任务名称和状态
-        header_frame = tk.Frame(content_container, bg=get_color('white'))
-        header_frame.pack(fill='x', pady=(0, get_spacing('sm')))
+        # 任务名称列 (20%)
+        name_frame = tk.Frame(content_container, bg=get_color('white'))
+        name_frame.pack(side='left', fill='both', expand=True)
 
-        # 任务名称
         task_name = task.get('title', f"v{task.get('id', '')}")
         name_label = tk.Label(
-            header_frame,
+            name_frame,
             text=task_name,
-            font=get_font('subtitle'),
+            font=get_font('medium'),  # 使用中等字体
             fg=get_color('text'),
-            bg=get_color('white')
+            bg=get_color('white'),
+            anchor='w'
         )
-        name_label.pack(side='left')
+        name_label.pack(fill='both', expand=True, padx=(0, get_spacing('md')))
 
-        # 状态徽章
-        status = task.get('status', 'stopped')
-        status_text, status_style = self.get_status_info(status)
-        status_badge = create_status_badge(header_frame, status_text, status_style)
-        status_badge.pack(side='right')
+        # 进度列 (15%) - 增大宽度和字体
+        progress_frame = tk.Frame(content_container, bg=get_color('white'), width=140)
+        progress_frame.pack(side='left', padx=get_spacing('xs'))
+        progress_frame.pack_propagate(False)
 
-        # 进度区域
-        progress_frame = tk.Frame(content_container, bg=get_color('white'))
-        progress_frame.pack(fill='x', pady=(0, get_spacing('sm')))
-
-        # 进度条背景
-        progress_bg = tk.Frame(
-            progress_frame,
-            bg=get_color('gray_light'),
-            height=8
-        )
-        progress_bg.pack(fill='x')
-        progress_bg.pack_propagate(False)
-
-        # 进度条
         progress = task.get('progress', 0)
-        if progress > 0:
-            progress_fill = tk.Frame(
-                progress_bg,
-                bg=self.get_progress_color(status),
-                height=8
-            )
-            # 使用after方法延迟设置进度条宽度
-            def set_progress():
-                try:
-                    total_width = progress_bg.winfo_width()
-                    if total_width > 1:
-                        progress_width = max(1, int(total_width * progress / 100))
-                        progress_fill.place(x=0, y=0, width=progress_width, height=8)
-                except:
-                    pass
+        progress_text = f"{progress:.1f}% ({task.get('sent', 0)}/{task.get('total', 1)})"
 
-            progress_bg.after(10, set_progress)
-
-        # 进度文字
-        progress_text = f"{progress:.1f}% ({task.get('sent', 0)}/{task.get('total', 0)})"
         progress_label = tk.Label(
             progress_frame,
             text=progress_text,
-            font=get_font('small'),
-            fg=get_color('text_light'),
-            bg=get_color('white')
+            font=get_font('medium'),  # 增大字体
+            fg=get_color('text'),
+            bg=get_color('white'),
+            anchor='center'
         )
-        progress_label.pack(pady=(get_spacing('xs'), 0))
+        progress_label.pack(fill='both', expand=True)
 
-        # 统计信息区域
-        stats_frame = tk.Frame(content_container, bg=get_color('white'))
-        stats_frame.pack(fill='x', pady=(0, get_spacing('sm')))
+        # 成功列 (10%) - 增大宽度和字体
+        success_frame = tk.Frame(content_container, bg=get_color('white'), width=90)
+        success_frame.pack(side='left', padx=get_spacing('xs'))
+        success_frame.pack_propagate(False)
 
-        # 成功数量
         success_label = tk.Label(
-            stats_frame,
-            text=f"✓ 成功: {task.get('success_count', 0)}",
-            font=get_font('small'),
+            success_frame,
+            text=str(task.get('success_count', 0)),
+            font=get_font('medium'),  # 增大字体
             fg=get_color('success'),
-            bg=get_color('white')
+            bg=get_color('white'),
+            anchor='center'
         )
-        success_label.pack(side='left', padx=(0, get_spacing('md')))
+        success_label.pack(fill='both', expand=True)
 
-        # 失败数量
+        # 失败列 (10%) - 增大宽度和字体
+        failed_frame = tk.Frame(content_container, bg=get_color('white'), width=90)
+        failed_frame.pack(side='left', padx=get_spacing('xs'))
+        failed_frame.pack_propagate(False)
+
         failed_label = tk.Label(
-            stats_frame,
-            text=f"✗ 失败: {task.get('failed_count', 0)}",
-            font=get_font('small'),
+            failed_frame,
+            text=str(task.get('failed_count', 0)),
+            font=get_font('medium'),  # 增大字体
             fg=get_color('danger'),
-            bg=get_color('white')
+            bg=get_color('white'),
+            anchor='center'
         )
-        failed_label.pack(side='left')
+        failed_label.pack(fill='both', expand=True)
 
-        # 操作按钮区域（悬停时显示）
+        # 状态列 (15%) - 增大宽度和字体
+        status_frame = tk.Frame(content_container, bg=get_color('white'), width=110)
+        status_frame.pack(side='left', padx=get_spacing('xs'))
+        status_frame.pack_propagate(False)
+
+        status = task.get('status', 'stopped')
+        status_text, status_style = self.get_status_info(status)
+
+        # 使用橙色操作文字替代徽章
+        if status == 'stopped':
+            action_text = "操作"
+            action_color = get_color('primary')
+        else:
+            action_text = status_text
+            action_color = self.get_status_color(status)
+
+        status_label = tk.Label(
+            status_frame,
+            text=action_text,
+            font=get_font('medium'),  # 增大字体
+            fg=action_color,
+            bg=get_color('white'),
+            anchor='center',
+            cursor='hand2'
+        )
+        status_label.pack(fill='both', expand=True)
+
+        # 绑定状态标签点击事件
+        status_label.bind("<Button-1>", lambda e: self.show_task_menu(task, status_label))
+
+        # 操作列 (30%)
         action_frame = tk.Frame(content_container, bg=get_color('white'))
-        action_frame.pack(fill='x')
+        action_frame.pack(side='right', padx=get_spacing('xs'))
 
-        # 快捷操作按钮
+        # 根据状态显示不同的快捷操作按钮
         if status == 'running':
             action_btn = create_modern_button(
                 action_frame,
                 text="⏸ 暂停",
                 style="warning",
                 command=lambda: self.pause_task_by_id(task_id),
-                width=8
+                width=6
             )
         elif status in ['paused', 'stopped']:
             action_btn = create_modern_button(
@@ -339,46 +386,77 @@ class TaskListWidget:
                 text="▶ 开始",
                 style="success",
                 command=lambda: self.start_task_by_id(task_id),
-                width=8
+                width=6
             )
         else:
             action_btn = create_modern_button(
                 action_frame,
-                text="📊 查看",
-                style="info",
+                text="查看",
+                style="secondary",
                 command=lambda: self.select_task(task),
-                width=8
+                width=6
             )
 
-        action_btn.pack(side='left')
+        action_btn.pack(side='left', padx=(0, get_spacing('xs')))
 
         # 更多操作按钮
         more_btn = create_modern_button(
             action_frame,
             text="⋯",
             style="secondary",
-            command=lambda: self.show_task_menu(task, card_frame),
-            width=4
+            command=lambda: self.show_task_menu(task, more_btn),
+            width=3
         )
-        more_btn.pack(side='right')
+        more_btn.pack(side='left')
 
-        # 存储卡片信息
-        self.task_cards[task_id] = {
-            'frame': card_frame,
+        # 存储任务项信息
+        self.task_items[task_id] = {
+            'frame': row_frame,
             'task': task,
-            'progress_bg': progress_bg,
             'progress_label': progress_label,
             'success_label': success_label,
-            'failed_label': failed_label
+            'failed_label': failed_label,
+            'status_label': status_label,
+            'content_container': content_container
         }
 
-        # 绑定点击选择事件
-        card_frame.bind("<Button-1>", lambda e: self.select_task(task))
-        content_container.bind("<Button-1>", lambda e: self.select_task(task))
-        name_label.bind("<Button-1>", lambda e: self.select_task(task))
+        # 绑定行点击选择事件
+        def bind_click_events(widget):
+            widget.bind("<Button-1>", lambda e: self.select_task(task))
+
+        # 为行元素绑定点击事件（排除按钮）
+        bind_click_events(row_frame)
+        bind_click_events(content_container)
+        bind_click_events(name_label)
+        bind_click_events(progress_label)
+        bind_click_events(success_label)
+        bind_click_events(failed_label)
 
         # 绑定右键菜单
-        card_frame.bind("<Button-3>", lambda e: self.show_task_menu(task, card_frame))
+        row_frame.bind("<Button-3>", lambda e: self.show_task_menu(task, row_frame))
+
+        # 隔行变色效果
+        if index % 2 == 1:
+            self.set_row_background(task_id, get_color('gray_light'))
+
+    def set_row_background(self, task_id, bg_color):
+        """设置行背景色"""
+        if task_id in self.task_items:
+            item = self.task_items[task_id]
+            widgets = [
+                item['frame'],
+                item['content_container'],
+                item['progress_label'],
+                item['success_label'],
+                item['failed_label'],
+                item['status_label']
+            ]
+
+            for widget in widgets:
+                try:
+                    widget.config(bg=bg_color)
+                except:
+                    pass
 
     def get_status_info(self, status):
         """获取状态信息"""
@@ -389,36 +467,46 @@ class TaskListWidget:
             'paused': ('暂停', 'warning'),
             'completed': ('完成', 'success'),
             'cancelled': ('已取消', 'gray'),
-            'failed': ('失败', 'danger')
+            'failed': ('失败', 'danger'),
+            'stopped': ('停止', 'gray')
         }
         return status_map.get(status, ('未知', 'gray'))
 
-    def get_progress_color(self, status):
-        """获取进度条颜色"""
+    def get_status_color(self, status):
+        """获取状态颜色"""
         color_map = {
             'running': get_color('primary'),
             'paused': get_color('warning'),
             'completed': get_color('success'),
-            'failed': get_color('danger')
+            'failed': get_color('danger'),
+            'stopped': get_color('gray')
         }
-        return color_map.get(status, get_color('info'))
+        return color_map.get(status, get_color('text'))
 
     def select_task(self, task):
         """选择任务"""
         # 清除之前的选中状态
-        for card_info in self.task_cards.values():
-            card_info['frame'].config(
+        for task_id, item in self.task_items.items():
+            item['frame'].config(
                 highlightbackground=get_color('border_light'),
                 highlightthickness=1
             )
+            # 恢复原背景色
+            task_index = next((i for i, t in enumerate(self.tasks) if t.get('id') == task_id), 0)
+            if task_index % 2 == 1:
+                self.set_row_background(task_id, get_color('gray_light'))
+            else:
+                self.set_row_background(task_id, get_color('white'))
 
         # 设置当前选中状态
         task_id = task.get('id')
-        if task_id in self.task_cards:
-            self.task_cards[task_id]['frame'].config(
+        if task_id in self.task_items:
+            self.task_items[task_id]['frame'].config(
                 highlightbackground=get_color('primary'),
                 highlightthickness=2
             )
+            # 设置选中背景色
+            self.set_row_background(task_id, get_color('selected'))
 
         self.selected_task = task
 
@@ -511,40 +599,27 @@ class TaskListWidget:
 
     def update_task_progress(self, task_id, progress_data):
         """更新任务进度显示"""
-        if task_id in self.task_cards:
-            card_info = self.task_cards[task_id]
-
-            # 更新进度条
-            progress = progress_data.get('progress', 0)
-            def update_progress():
-                try:
-                    total_width = card_info['progress_bg'].winfo_width()
-                    if total_width > 1:
-                        progress_width = max(1, int(total_width * progress / 100))
-                        # 这里需要重新创建进度条填充
-                        for child in card_info['progress_bg'].winfo_children():
-                            child.destroy()
-                        if progress > 0:
-                            progress_fill = tk.Frame(
-                                card_info['progress_bg'],
-                                bg=self.get_progress_color(progress_data.get('status', 'stopped')),
-                                height=8
-                            )
-                            progress_fill.place(x=0, y=0, width=progress_width, height=8)
-                except:
-                    pass
-
-            card_info['progress_bg'].after(10, update_progress)
+        if task_id in self.task_items:
+            item = self.task_items[task_id]
 
             # 更新进度文字
+            progress = progress_data.get('progress', 0)
             progress_text = f"{progress:.1f}% ({progress_data.get('sent', 0)}/{progress_data.get('total', 0)})"
-            card_info['progress_label'].config(text=progress_text)
+            item['progress_label'].config(text=progress_text)
 
             # 更新统计信息
-            card_info['success_label'].config(text=f"✓ 成功: {progress_data.get('success_count', 0)}")
-            card_info['failed_label'].config(text=f"✗ 失败: {progress_data.get('failed_count', 0)}")
+            item['success_label'].config(text=str(progress_data.get('success_count', 0)))
+            item['failed_label'].config(text=str(progress_data.get('failed_count', 0)))
 
-    # 保持原有的所有方法逻辑不变，只是调用方式
+            # 更新状态
+            status = progress_data.get('status', 'stopped')
+            status_text, status_style = self.get_status_info(status)
+            item['status_label'].config(
+                text=status_text,
+                fg=self.get_status_color(status)
+            )
+
+    # 保持原有的所有方法逻辑不变，只是界面呈现方式改变
     def stop_sending(self):
         """停止发送"""
         if messagebox.askyesno("确认", "确定要停止所有正在发送的任务吗？"):
@@ -699,8 +774,8 @@ class TaskListWidget:
 def main():
     """测试优化后的任务列表组件"""
     root = tk.Tk()
-    root.title("优化任务列表测试")
-    root.geometry("500x700")
+    root.title("优化任务列表测试 - 增大字体版本")
+    root.geometry("900x600")
     root.configure(bg=get_color('background'))
 
     # 模拟用户信息

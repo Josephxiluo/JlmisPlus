@@ -1,5 +1,5 @@
 """
-优化后的端口网格组件 - 现代化卡片设计
+优化后的端口网格组件 - 自适应列数和修复按钮样式
 """
 
 import tkinter as tk
@@ -15,7 +15,7 @@ from services.port_service import PortService
 
 
 class PortGridWidget:
-    """优化后的端口网格组件"""
+    """优化后的端口网格组件 - 自适应列数"""
 
     def __init__(self, parent, user_info, on_port_select=None):
         self.parent = parent
@@ -25,6 +25,8 @@ class PortGridWidget:
         self.selected_ports = set()
         self.port_cards = {}
         self.ports_data = []
+        self.card_width = 280  # 卡片固定宽度
+        self.card_height = 180  # 卡片固定高度
         self.create_widgets()
         self.load_ports()
 
@@ -105,7 +107,7 @@ class PortGridWidget:
         self.stop_ports_button = create_modern_button(
             button_row2,
             text="⏹ 停止端口",
-            style="danger",
+            style="gray",  # 使用修复后的灰色样式（黑色文字）
             command=self.stop_selected_ports,
             width=8
         )
@@ -114,7 +116,7 @@ class PortGridWidget:
         self.clear_all_button = create_modern_button(
             button_row2,
             text="🧹 清除全部记录",
-            style="warning",
+            style="gray",  # 使用修复后的灰色样式（黑色文字）
             command=self.clear_all_records,
             width=12
         )
@@ -123,14 +125,14 @@ class PortGridWidget:
         self.clear_current_button = create_modern_button(
             button_row2,
             text="🗑 清除当前记录",
-            style="warning",
+            style="gray",  # 使用修复后的灰色样式（黑色文字）
             command=self.clear_current_records,
             width=12
         )
         self.clear_current_button.pack(side='left')
 
     def create_port_grid(self):
-        """创建优化后的端口网格区域"""
+        """创建优化后的端口网格区域 - 支持自适应列数"""
         # 网格容器
         grid_frame = tk.Frame(self.content_frame, bg=get_color('card_bg'))
         grid_frame.pack(fill='both', expand=True, padx=get_spacing('sm'), pady=get_spacing('sm'))
@@ -165,9 +167,49 @@ class PortGridWidget:
         # 绑定鼠标滚轮事件
         self.canvas.bind("<MouseWheel>", self._on_mousewheel)
 
+        # 绑定画布大小变化事件，实现自适应列数
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
     def _on_mousewheel(self, event):
         """处理鼠标滚轮事件"""
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def _on_canvas_configure(self, event):
+        """画布大小变化时重新计算布局"""
+        # 延迟执行，避免频繁重绘
+        if hasattr(self, '_resize_after_id'):
+            self.canvas.after_cancel(self._resize_after_id)
+        self._resize_after_id = self.canvas.after(200, self._recalculate_layout)
+
+    def _recalculate_layout(self):
+        """重新计算并布局端口卡片"""
+        if self.ports_data:
+            self.update_port_grid()
+
+    def calculate_columns(self):
+        """根据容器宽度计算最优列数"""
+        try:
+            # 获取可用宽度
+            canvas_width = self.canvas.winfo_width()
+
+            # 考虑滚动条宽度和边距
+            scrollbar_width = 20
+            padding = get_spacing('sm') * 2
+            available_width = canvas_width - scrollbar_width - padding
+
+            # 计算列数（考虑卡片间距）
+            card_spacing = get_spacing('xs') * 2  # 左右间距
+            total_card_width = self.card_width + card_spacing
+
+            cols = max(1, available_width // total_card_width)
+
+            # 限制最大列数，避免卡片过小
+            max_cols = min(6, len(self.ports_data)) if self.ports_data else 4
+            cols = min(cols, max_cols)
+
+            return cols
+        except:
+            return 3  # 默认3列
 
     def load_ports(self):
         """加载端口数据"""
@@ -182,37 +224,51 @@ class PortGridWidget:
             messagebox.showerror("错误", f"加载端口数据失败：{str(e)}")
 
     def update_port_grid(self):
-        """更新端口网格显示"""
+        """更新端口网格显示 - 自适应列数"""
         # 清空现有组件
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
         self.port_cards.clear()
 
-        # 创建端口网格 (2列布局)
-        cols = 2
+        if not self.ports_data:
+            return
+
+        # 计算列数
+        cols = self.calculate_columns()
+
+        # 创建端口网格
         for i, port in enumerate(self.ports_data):
             row = i // cols
             col = i % cols
-            self.create_port_card(port, row, col)
+            self.create_port_card(port, row, col, cols)
 
-        # 配置列权重
+        # 配置列权重，实现均匀分布
         for col in range(cols):
-            self.scrollable_frame.grid_columnconfigure(col, weight=1)
+            self.scrollable_frame.grid_columnconfigure(col, weight=1, uniform="port_col")
 
-    def create_port_card(self, port, row, col):
+    def create_port_card(self, port, row, col, total_cols):
         """创建单个端口卡片"""
         port_id = port.get('id')
 
-        # 端口卡片容器
+        # 端口卡片容器 - 固定尺寸
         port_frame = tk.Frame(
             self.scrollable_frame,
             bg=get_color('white'),
             relief='solid',
             bd=1,
             highlightbackground=get_color('border_light'),
-            highlightthickness=1
+            highlightthickness=1,
+            width=self.card_width,
+            height=self.card_height
         )
-        port_frame.grid(row=row, column=col, padx=get_spacing('xs'), pady=get_spacing('xs'), sticky='ew')
+        port_frame.grid(
+            row=row,
+            column=col,
+            padx=get_spacing('xs'),
+            pady=get_spacing('xs'),
+            sticky='ew'
+        )
+        port_frame.pack_propagate(False)  # 保持固定尺寸
 
         # 内容容器
         content_container = tk.Frame(port_frame, bg=get_color('white'))
@@ -623,8 +679,8 @@ class PortGridWidget:
 def main():
     """测试优化后的端口网格组件"""
     root = tk.Tk()
-    root.title("优化端口网格测试")
-    root.geometry("700x600")
+    root.title("优化端口网格测试 - 自适应列数")
+    root.geometry("1000x700")
     root.configure(bg=get_color('background'))
 
     # 模拟用户信息
