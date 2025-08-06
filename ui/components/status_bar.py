@@ -85,7 +85,7 @@ class StatusBar:
             text_container,
             text="仅供测试研究，严禁用于违法用途",
             font=get_font('small'),
-            fg='rgba(255,255,255,0.8)',
+            fg='white',
             bg=get_color('primary')
         )
         subtitle_label.pack(anchor='w')
@@ -163,7 +163,7 @@ class StatusBar:
             time_frame,
             text=self.get_current_time(),
             font=get_font('small'),
-            fg='rgba(255,255,255,0.9)',
+            fg='white',
             bg=get_color('primary')
         )
         self.time_label.pack(side='right')
