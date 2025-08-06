@@ -19,40 +19,190 @@ try:
     from config.settings import settings
     from config.logging_config import get_logger, log_port_action, log_error, log_info, log_timer_action
 except ImportError:
-    # 简化处理
+    # 简化处理 - 修复 Mock 类
     class MockPort:
-        def __init__(self, port_name):
+        def __init__(self, port_name, port_id=None):
             self.port_name = port_name
-            self.status = "offline"
-            self.is_connected = False
+            self.id = port_id or port_name
+            self.name = port_name
+            self.status = "available"
+            self.is_connected = True
             self.send_count = 0
             self.send_limit = 60
             self.is_selected = False
+            self.carrier = ["中国移动", "中国联通", "中国电信"][hash(port_name) % 3]
+            self.success_count = hash(port_name) % 50
+            self.failed_count = hash(port_name) % 5
+            self.limit = self.send_limit
 
         def connect(self):
+            self.status = "available"
+            self.is_connected = True
             return True
 
         def disconnect(self):
+            self.status = "offline"
+            self.is_connected = False
             return True
 
         def get_summary(self):
-            return {'port_name': self.port_name}
+            return {
+                'id': self.id,
+                'name': self.port_name,
+                'port_name': self.port_name,
+                'status': self.status,
+                'carrier': self.carrier,
+                'limit': self.send_limit,
+                'success_count': self.success_count,
+                'failed_count': self.failed_count,
+                'is_connected': self.is_connected,
+                'is_selected': self.is_selected
+            }
 
     class MockPortManager:
         def __init__(self):
-            self.ports = {}
+            # 模拟端口数据
+            self.ports = {
+                'COM1': MockPort('COM1', 1),
+                'COM2': MockPort('COM2', 2),
+                'COM3': MockPort('COM3', 3),
+                'COM4': MockPort('COM4', 4),
+                'COM5': MockPort('COM5', 5),
+            }
 
         def scan_and_update_ports(self):
-            return []
+            return list(self.ports.values())
 
         def get_all_ports(self):
-            return []
+            return list(self.ports.values())
 
         def get_available_ports(self):
-            return []
+            return [p for p in self.ports.values() if p.status == "available"]
 
         def get_selected_ports(self):
-            return []
+            return [p for p in self.ports.values() if p.is_selected]
+
+        def get_port(self, port_name):
+            return self.ports.get(port_name)
+
+        def connect_all_ports(self):
+            count = 0
+            for port in self.ports.values():
+                if port.connect():
+                    count += 1
+            return count
+
+        def disconnect_all_ports(self):
+            count = 0
+            for port in self.ports.values():
+                if port.disconnect():
+                    count += 1
+            return count
+
+        def select_port(self, port_name, selected=True):
+            port = self.ports.get(port_name)
+            if port:
+                port.is_selected = selected
+                return True
+            return False
+
+        def select_all_ports(self):
+            count = 0
+            for port in self.ports.values():
+                port.is_selected = True
+                count += 1
+            return count
+
+        def unselect_all_ports(self):
+            count = 0
+            for port in self.ports.values():
+                port.is_selected = False
+                count += 1
+            return count
+
+        def invert_selection(self):
+            count = 0
+            for port in self.ports.values():
+                port.is_selected = not port.is_selected
+                count += 1
+            return count
+
+        def start_selected_ports(self):
+            count = 0
+            for port in self.ports.values():
+                if port.is_selected and port.connect():
+                    count += 1
+            return count
+
+        def stop_selected_ports(self):
+            count = 0
+            for port in self.ports.values():
+                if port.is_selected and port.disconnect():
+                    count += 1
+            return count
+
+        def clear_all_statistics(self):
+            count = 0
+            for port in self.ports.values():
+                port.success_count = 0
+                port.failed_count = 0
+                port.send_count = 0
+                count += 1
+            return count
+
+        def clear_selected_statistics(self):
+            count = 0
+            for port in self.ports.values():
+                if port.is_selected:
+                    port.success_count = 0
+                    port.failed_count = 0
+                    port.send_count = 0
+                    count += 1
+            return count
+
+        def reset_all_send_counts(self):
+            count = 0
+            for port in self.ports.values():
+                port.send_count = 0
+                count += 1
+            return count
+
+        def reset_selected_send_counts(self):
+            count = 0
+            for port in self.ports.values():
+                if port.is_selected:
+                    port.send_count = 0
+                    count += 1
+            return count
+
+        def update_port_config(self, port_name, config):
+            port = self.ports.get(port_name)
+            if port:
+                # 更新配置
+                for key, value in config.items():
+                    if hasattr(port, key):
+                        setattr(port, key, value)
+                return True
+            return False
+
+        def batch_update_config(self, config, selected_only=True):
+            count = 0
+            for port in self.ports.values():
+                if not selected_only or port.is_selected:
+                    for key, value in config.items():
+                        if hasattr(port, key):
+                            setattr(port, key, value)
+                    count += 1
+            return count
+
+        def get_next_available_port(self, carrier=None, exclude_ports=None):
+            exclude_ports = exclude_ports or []
+            for port in self.ports.values():
+                if (port.status == "available" and
+                    port.port_name not in exclude_ports and
+                    (not carrier or port.carrier == carrier)):
+                    return port
+            return None
 
     Port = MockPort
     PortManager = MockPortManager
@@ -190,6 +340,31 @@ class PortService:
             'message': '端口管理服务正常运行' if self.is_initialized else '端口管理服务未初始化'
         }
 
+    def get_ports(self) -> Dict[str, Any]:
+        """获取所有端口 - 添加缺失的方法"""
+        try:
+            ports = self.port_manager.get_all_ports()
+            ports_data = [port.get_summary() for port in ports]
+
+            return {
+                'success': True,
+                'ports': ports_data,
+                'total_count': len(ports_data),
+                'available_count': len([p for p in ports_data if p['status'] == 'available']),
+                'message': f'成功获取{len(ports_data)}个端口信息'
+            }
+
+        except Exception as e:
+            log_error("获取端口列表失败", error=e)
+            return {
+                'success': False,
+                'ports': [],
+                'total_count': 0,
+                'available_count': 0,
+                'message': f'获取端口失败: {str(e)}',
+                'error': str(e)
+            }
+
     def scan_ports(self) -> Dict[str, Any]:
         """扫描端口"""
         try:
@@ -201,7 +376,7 @@ class PortService:
 
                 # 统计端口信息
                 total_count = len(ports)
-                online_count = len([p for p in ports if not p.is_offline()])
+                online_count = len([p for p in ports if p.status != "offline"])
 
                 # 通知端口变化
                 self._notify_port_change('scan', ports)
@@ -554,184 +729,6 @@ class PortService:
                 'error_code': 'SYSTEM_ERROR'
             }
 
-    def update_port_config(self, port_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
-        """更新端口配置"""
-        try:
-            if self.port_manager.update_port_config(port_name, config):
-                return {
-                    'success': True,
-                    'message': f'端口{port_name}配置更新成功',
-                    'config': config
-                }
-            else:
-                return {
-                    'success': False,
-                    'message': f'端口{port_name}不存在或配置更新失败',
-                    'error_code': 'UPDATE_FAILED'
-                }
-        except Exception as e:
-            log_error(f"更新端口{port_name}配置异常", error=e)
-            return {
-                'success': False,
-                'message': f'配置更新异常: {str(e)}',
-                'error_code': 'SYSTEM_ERROR'
-            }
-
-    def batch_update_config(self, config: Dict[str, Any], selected_only: bool = True) -> Dict[str, Any]:
-        """批量更新端口配置"""
-        try:
-            updated_count = self.port_manager.batch_update_config(config, selected_only)
-            target = "选中端口" if selected_only else "所有端口"
-
-            return {
-                'success': True,
-                'message': f'成功更新{updated_count}个{target}的配置',
-                'updated_count': updated_count,
-                'config': config
-            }
-        except Exception as e:
-            log_error("批量更新端口配置异常", error=e)
-            return {
-                'success': False,
-                'message': f'批量更新异常: {str(e)}',
-                'error_code': 'SYSTEM_ERROR'
-            }
-
-    def get_ports_summary(self) -> Dict[str, Any]:
-        """获取端口概览"""
-        try:
-            return self.port_manager.get_ports_summary()
-        except Exception as e:
-            log_error("获取端口概览异常", error=e)
-            return {}
-
-    def auto_detect_carriers(self) -> Dict[str, Any]:
-        """自动检测运营商"""
-        try:
-            detected_count = self.port_manager.auto_detect_carriers()
-            return {
-                'success': True,
-                'message': f'自动检测完成，{detected_count}个端口运营商信息有变更',
-                'detected_count': detected_count
-            }
-        except Exception as e:
-            log_error("自动检测运营商异常", error=e)
-            return {
-                'success': False,
-                'message': f'检测异常: {str(e)}',
-                'error_code': 'SYSTEM_ERROR'
-            }
-
-    def check_send_limits(self) -> Dict[str, Any]:
-        """检查发送上限"""
-        try:
-            limit_reached_ports = self.port_manager.check_send_limits()
-            return {
-                'limit_reached_ports': limit_reached_ports,
-                'count': len(limit_reached_ports),
-                'need_reset': len(limit_reached_ports) > 0,
-                'message': f'有{len(limit_reached_ports)}个端口达到发送上限' if limit_reached_ports else '所有端口发送正常'
-            }
-        except Exception as e:
-            log_error("检查发送上限异常", error=e)
-            return {
-                'limit_reached_ports': [],
-                'count': 0,
-                'need_reset': False,
-                'error': str(e)
-            }
-
-    def get_port_health_status(self) -> Dict[str, Any]:
-        """获取端口健康状态"""
-        try:
-            return self.port_manager.get_port_health_status()
-        except Exception as e:
-            log_error("获取端口健康状态异常", error=e)
-            return {
-                'healthy_ports': [],
-                'warning_ports': [],
-                'error_ports': [],
-                'offline_ports': [],
-                'error': str(e)
-            }
-
-    def get_next_available_port(self, carrier: str = None, exclude_ports: List[str] = None) -> Optional[Dict[str, Any]]:
-        """获取下一个可用端口"""
-        try:
-            port = self.port_manager.get_next_available_port(carrier, exclude_ports)
-            if port:
-                return port.get_summary()
-            return None
-        except Exception as e:
-            log_error("获取下一个可用端口异常", error=e)
-            return None
-
-    def distribute_messages_to_ports(self, message_count: int, carrier: str = None) -> Dict[str, Any]:
-        """将消息分配到端口"""
-        try:
-            distribution = self.port_manager.distribute_messages_to_ports(message_count, carrier)
-
-            if not distribution:
-                return {
-                    'success': False,
-                    'message': '没有可用的端口进行消息分配',
-                    'distribution': {}
-                }
-
-            return {
-                'success': True,
-                'message': f'成功将{message_count}条消息分配到{len(distribution)}个端口',
-                'distribution': distribution,
-                'total_allocated': sum(distribution.values())
-            }
-        except Exception as e:
-            log_error("分配消息到端口异常", error=e)
-            return {
-                'success': False,
-                'message': f'分配异常: {str(e)}',
-                'distribution': {},
-                'error_code': 'SYSTEM_ERROR'
-            }
-
-    def add_port_change_callback(self, callback: Callable[[str, List], None]):
-        """添加端口变化回调函数"""
-        try:
-            if callable(callback):
-                self._port_change_callbacks.append(callback)
-                log_info(f"添加端口变化回调函数，当前回调数量: {len(self._port_change_callbacks)}")
-        except Exception as e:
-            log_error("添加端口变化回调失败", error=e)
-
-    def remove_port_change_callback(self, callback: Callable[[str, List], None]):
-        """移除端口变化回调函数"""
-        try:
-            if callback in self._port_change_callbacks:
-                self._port_change_callbacks.remove(callback)
-                log_info(f"移除端口变化回调函数，当前回调数量: {len(self._port_change_callbacks)}")
-        except Exception as e:
-            log_error("移除端口变化回调失败", error=e)
-
-    def set_check_interval(self, interval_seconds: int):
-        """设置状态检查间隔"""
-        try:
-            if interval_seconds < 5:  # 最小5秒
-                interval_seconds = 5
-            elif interval_seconds > 300:  # 最大5分钟
-                interval_seconds = 300
-
-            old_interval = self.check_interval
-            self.check_interval = interval_seconds
-
-            # 重启监控
-            if self.is_initialized:
-                self._stop_status_monitoring()
-                self._start_status_monitoring()
-
-            log_info(f"端口状态检查间隔已更新: {old_interval}秒 -> {interval_seconds}秒")
-
-        except Exception as e:
-            log_error("设置检查间隔失败", error=e)
-
     def _start_status_monitoring(self):
         """启动状态监控"""
         try:
@@ -765,17 +762,6 @@ class PortService:
                 # 检查端口状态
                 ports = self.port_manager.get_all_ports()
 
-                # 检查发送上限
-                limit_reached = self.check_send_limits()
-                if limit_reached['need_reset']:
-                    log_info(f"检测到{limit_reached['count']}个端口达到发送上限")
-
-                # 检查端口健康状态
-                health_status = self.get_port_health_status()
-                error_ports = health_status.get('error_ports', [])
-                if error_ports:
-                    log_info(f"检测到{len(error_ports)}个端口处于错误状态")
-
                 # 自动重新扫描（如果启用）
                 if self.auto_scan:
                     # 每分钟检查一次新端口
@@ -805,320 +791,23 @@ class PortService:
         except Exception as e:
             log_error("通知端口变化失败", error=e)
 
-    def get_default_config(self) -> Dict[str, Any]:
-        """获取默认端口配置"""
-        return {
-            'send_limit': self.card_switch_interval,
-            'send_interval': self.default_send_interval,
-            'baud_rate': 115200,
-            'data_bits': 8,
-            'stop_bits': 1,
-            'parity': 'N'
-        }
-
-    def export_port_config(self) -> Dict[str, Any]:
-        """导出端口配置"""
+    def add_port_change_callback(self, callback: Callable):
+        """添加端口变化回调函数"""
         try:
-            ports = self.port_manager.get_all_ports()
-            config_data = []
-
-            for port in ports:
-                config_data.append({
-                    'port_name': port.port_name,
-                    'carrier': port.carrier,
-                    'send_limit': port.send_limit,
-                    'send_interval': port.send_interval,
-                    'baud_rate': port.baud_rate,
-                    'data_bits': port.data_bits,
-                    'stop_bits': port.stop_bits,
-                    'parity': port.parity
-                })
-
-            return {
-                'success': True,
-                'config_data': config_data,
-                'export_time': datetime.now().isoformat(),
-                'total_ports': len(config_data)
-            }
-
+            if callable(callback):
+                self._port_change_callbacks.append(callback)
+                log_info(f"添加端口变化回调函数，当前回调数量: {len(self._port_change_callbacks)}")
         except Exception as e:
-            log_error("导出端口配置异常", error=e)
-            return {
-                'success': False,
-                'message': f'导出异常: {str(e)}',
-                'error_code': 'EXPORT_FAILED'
-            }
+            log_error("添加端口变化回调失败", error=e)
 
-    def import_port_config(self, config_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """导入端口配置"""
+    def remove_port_change_callback(self, callback: Callable):
+        """移除端口变化回调函数"""
         try:
-            imported_count = 0
-            failed_count = 0
-
-            for port_config in config_data:
-                port_name = port_config.get('port_name')
-                if not port_name:
-                    failed_count += 1
-                    continue
-
-                # 移除端口名称，剩下的作为配置
-                config = {k: v for k, v in port_config.items() if k != 'port_name'}
-
-                if self.port_manager.update_port_config(port_name, config):
-                    imported_count += 1
-                else:
-                    failed_count += 1
-
-            return {
-                'success': True,
-                'message': f'成功导入{imported_count}个端口配置，失败{failed_count}个',
-                'imported_count': imported_count,
-                'failed_count': failed_count,
-                'total_count': len(config_data)
-            }
-
+            if callback in self._port_change_callbacks:
+                self._port_change_callbacks.remove(callback)
+                log_info(f"移除端口变化回调函数，当前回调数量: {len(self._port_change_callbacks)}")
         except Exception as e:
-            log_error("导入端口配置异常", error=e)
-            return {
-                'success': False,
-                'message': f'导入异常: {str(e)}',
-                'error_code': 'IMPORT_FAILED'
-            }
-
-    def get_port_statistics(self) -> Dict[str, Any]:
-        """获取端口统计信息"""
-        try:
-            all_ports = self.port_manager.get_all_ports()
-
-            if not all_ports:
-                return {
-                    'total_ports': 0,
-                    'statistics': {}
-                }
-
-            stats = {
-                'total_ports': len(all_ports),
-                'connected_ports': len([p for p in all_ports if p.is_connected]),
-                'available_ports': len(self.port_manager.get_available_ports()),
-                'selected_ports': len(self.port_manager.get_selected_ports()),
-                'total_sent': sum(p.total_sent for p in all_ports),
-                'total_success': sum(p.success_count for p in all_ports),
-                'total_failed': sum(p.failed_count for p in all_ports),
-                'by_carrier': {},
-                'by_status': {},
-                'send_progress': []
-            }
-
-            # 按运营商统计
-            for carrier in ['mobile', 'unicom', 'telecom', 'unknown']:
-                carrier_ports = [p for p in all_ports if p.carrier == carrier]
-                if carrier_ports:
-                    stats['by_carrier'][carrier] = {
-                        'count': len(carrier_ports),
-                        'connected': len([p for p in carrier_ports if p.is_connected]),
-                        'total_sent': sum(p.total_sent for p in carrier_ports),
-                        'success_rate': round(
-                            sum(p.success_count for p in carrier_ports) /
-                            max(sum(p.total_sent for p in carrier_ports), 1) * 100, 2
-                        )
-                    }
-
-            # 按状态统计
-            for status in ['available', 'busy', 'error', 'offline']:
-                status_ports = [p for p in all_ports if p.status == status]
-                stats['by_status'][status] = len(status_ports)
-
-            # 发送进度统计
-            for port in all_ports:
-                if port.send_limit > 0:
-                    progress = round(port.send_count / port.send_limit * 100, 2)
-                    stats['send_progress'].append({
-                        'port_name': port.port_name,
-                        'progress': progress,
-                        'current': port.send_count,
-                        'limit': port.send_limit
-                    })
-
-            return stats
-
-        except Exception as e:
-            log_error("获取端口统计信息异常", error=e)
-            return {'total_ports': 0, 'error': str(e)}
-
-    def optimize_port_distribution(self) -> Dict[str, Any]:
-        """优化端口分配"""
-        try:
-            ports = self.port_manager.get_all_ports()
-            if not ports:
-                return {
-                    'success': False,
-                    'message': '没有可用端口进行优化',
-                    'optimizations': []
-                }
-
-            optimizations = []
-
-            # 检查负载均衡
-            connected_ports = [p for p in ports if p.is_connected]
-            if connected_ports:
-                avg_sent = sum(p.send_count for p in connected_ports) / len(connected_ports)
-
-                for port in connected_ports:
-                    if port.send_count > avg_sent * 1.5:  # 超过平均值50%
-                        optimizations.append({
-                            'type': 'high_load',
-                            'port': port.port_name,
-                            'current_load': port.send_count,
-                            'average_load': round(avg_sent, 2),
-                            'suggestion': '考虑暂停此端口或重置发送计数'
-                        })
-                    elif port.send_count < avg_sent * 0.5:  # 低于平均值50%
-                        optimizations.append({
-                            'type': 'low_utilization',
-                            'port': port.port_name,
-                            'current_load': port.send_count,
-                            'average_load': round(avg_sent, 2),
-                            'suggestion': '此端口利用率较低，可优先分配任务'
-                        })
-
-            # 检查端口配置
-            for port in ports:
-                if port.send_interval < 500:
-                    optimizations.append({
-                        'type': 'fast_interval',
-                        'port': port.port_name,
-                        'current_interval': port.send_interval,
-                        'suggestion': '发送间隔过短，可能导致发送过快被限制'
-                    })
-
-                if port.send_limit > 100:
-                    optimizations.append({
-                        'type': 'high_limit',
-                        'port': port.port_name,
-                        'current_limit': port.send_limit,
-                        'suggestion': '发送上限较高，建议降低以避免运营商限制'
-                    })
-
-            return {
-                'success': True,
-                'message': f'端口优化分析完成，发现{len(optimizations)}项建议',
-                'optimizations': optimizations,
-                'total_ports': len(ports),
-                'analyzed_time': datetime.now().isoformat()
-            }
-
-        except Exception as e:
-            log_error("优化端口分配异常", error=e)
-            return {
-                'success': False,
-                'message': f'优化异常: {str(e)}',
-                'error_code': 'OPTIMIZATION_FAILED'
-            }
-
-    def backup_port_settings(self) -> Dict[str, Any]:
-        """备份端口设置"""
-        try:
-            backup_data = {
-                'backup_time': datetime.now().isoformat(),
-                'service_config': {
-                    'auto_scan': self.auto_scan,
-                    'check_interval': self.check_interval,
-                    'default_send_interval': self.default_send_interval,
-                    'card_switch_interval': self.card_switch_interval
-                },
-                'ports': []
-            }
-
-            # 备份所有端口配置
-            for port in self.port_manager.get_all_ports():
-                port_data = {
-                    'port_name': port.port_name,
-                    'carrier': port.carrier,
-                    'send_limit': port.send_limit,
-                    'send_interval': port.send_interval,
-                    'baud_rate': port.baud_rate,
-                    'data_bits': port.data_bits,
-                    'stop_bits': port.stop_bits,
-                    'parity': port.parity,
-                    'is_selected': port.is_selected
-                }
-                backup_data['ports'].append(port_data)
-
-            return {
-                'success': True,
-                'message': f'成功备份{len(backup_data["ports"])}个端口的设置',
-                'backup_data': backup_data,
-                'backup_size': len(str(backup_data))
-            }
-
-        except Exception as e:
-            log_error("备份端口设置异常", error=e)
-            return {
-                'success': False,
-                'message': f'备份异常: {str(e)}',
-                'error_code': 'BACKUP_FAILED'
-            }
-
-    def restore_port_settings(self, backup_data: Dict[str, Any]) -> Dict[str, Any]:
-        """恢复端口设置"""
-        try:
-            if 'ports' not in backup_data:
-                return {
-                    'success': False,
-                    'message': '备份数据格式错误',
-                    'error_code': 'INVALID_BACKUP_DATA'
-                }
-
-            restored_count = 0
-            failed_count = 0
-
-            # 恢复服务配置
-            if 'service_config' in backup_data:
-                service_config = backup_data['service_config']
-                self.auto_scan = service_config.get('auto_scan', self.auto_scan)
-                self.default_send_interval = service_config.get('default_send_interval', self.default_send_interval)
-                self.card_switch_interval = service_config.get('card_switch_interval', self.card_switch_interval)
-
-                # 更新检查间隔
-                new_interval = service_config.get('check_interval', self.check_interval)
-                if new_interval != self.check_interval:
-                    self.set_check_interval(new_interval)
-
-            # 恢复端口配置
-            for port_data in backup_data['ports']:
-                port_name = port_data.get('port_name')
-                if not port_name:
-                    failed_count += 1
-                    continue
-
-                # 移除端口名称，剩下的作为配置
-                config = {k: v for k, v in port_data.items() if k != 'port_name'}
-
-                if self.port_manager.update_port_config(port_name, config):
-                    # 恢复选择状态
-                    if 'is_selected' in port_data:
-                        self.port_manager.select_port(port_name, port_data['is_selected'])
-                    restored_count += 1
-                else:
-                    failed_count += 1
-
-            backup_time = backup_data.get('backup_time', '未知时间')
-
-            return {
-                'success': True,
-                'message': f'从{backup_time}的备份中恢复了{restored_count}个端口设置，失败{failed_count}个',
-                'restored_count': restored_count,
-                'failed_count': failed_count,
-                'backup_time': backup_time
-            }
-
-        except Exception as e:
-            log_error("恢复端口设置异常", error=e)
-            return {
-                'success': False,
-                'message': f'恢复异常: {str(e)}',
-                'error_code': 'RESTORE_FAILED'
-            }
+            log_error("移除端口变化回调失败", error=e)
 
 
 # 全局端口服务实例

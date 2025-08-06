@@ -1,5 +1,5 @@
 """
-端口网格组件 - 右侧串口管理区域
+端口网格组件 - 右侧串口管理区域（完整版）
 """
 
 import tkinter as tk
@@ -58,9 +58,13 @@ class PortGridWidget:
         button_frame = tk.Frame(header_frame, bg=get_color('background'))
         button_frame.pack(side='right')
 
+        # 第一行按钮
+        button_row1 = tk.Frame(button_frame, bg=get_color('background'))
+        button_row1.pack(fill='x', pady=(0, 2))
+
         # 全选按钮
         self.select_all_button = tk.Button(
-            button_frame,
+            button_row1,
             text="全选",
             font=get_font('button'),
             bg=get_color('primary'),
@@ -70,11 +74,11 @@ class PortGridWidget:
             command=self.select_all,
             width=6
         )
-        self.select_all_button.pack(side='left', padx=(0, 5))
+        self.select_all_button.pack(side='left', padx=(0, 2))
 
         # 取消全选按钮
         self.deselect_all_button = tk.Button(
-            button_frame,
+            button_row1,
             text="取消全选",
             font=get_font('button'),
             bg=get_color('gray'),
@@ -84,11 +88,11 @@ class PortGridWidget:
             command=self.deselect_all,
             width=8
         )
-        self.deselect_all_button.pack(side='left', padx=(0, 5))
+        self.deselect_all_button.pack(side='left', padx=(0, 2))
 
         # 反选按钮
         self.invert_selection_button = tk.Button(
-            button_frame,
+            button_row1,
             text="反选",
             font=get_font('button'),
             bg=get_color('primary'),
@@ -98,11 +102,11 @@ class PortGridWidget:
             command=self.invert_selection,
             width=6
         )
-        self.invert_selection_button.pack(side='left', padx=(0, 5))
+        self.invert_selection_button.pack(side='left', padx=(0, 2))
 
         # 选项按钮
         self.config_button = tk.Button(
-            button_frame,
+            button_row1,
             text="选项",
             font=get_font('button'),
             bg=get_color('primary'),
@@ -113,6 +117,66 @@ class PortGridWidget:
             width=6
         )
         self.config_button.pack(side='left')
+
+        # 第二行按钮
+        button_row2 = tk.Frame(button_frame, bg=get_color('background'))
+        button_row2.pack(fill='x')
+
+        # 启动端口按钮
+        self.start_ports_button = tk.Button(
+            button_row2,
+            text="启动端口",
+            font=get_font('button'),
+            bg=get_color('success'),
+            fg='white',
+            relief='flat',
+            cursor='hand2',
+            command=self.start_selected_ports,
+            width=8
+        )
+        self.start_ports_button.pack(side='left', padx=(0, 2))
+
+        # 停止端口按钮
+        self.stop_ports_button = tk.Button(
+            button_row2,
+            text="停止端口",
+            font=get_font('button'),
+            bg=get_color('danger'),
+            fg='white',
+            relief='flat',
+            cursor='hand2',
+            command=self.stop_selected_ports,
+            width=8
+        )
+        self.stop_ports_button.pack(side='left', padx=(0, 2))
+
+        # 清除全部记录按钮
+        self.clear_all_button = tk.Button(
+            button_row2,
+            text="清除全部记录",
+            font=get_font('button'),
+            bg=get_color('warning'),
+            fg='white',
+            relief='flat',
+            cursor='hand2',
+            command=self.clear_all_records,
+            width=12
+        )
+        self.clear_all_button.pack(side='left', padx=(0, 2))
+
+        # 清除当前记录按钮
+        self.clear_current_button = tk.Button(
+            button_row2,
+            text="清除当前记录",
+            font=get_font('button'),
+            bg=get_color('warning'),
+            fg='white',
+            relief='flat',
+            cursor='hand2',
+            command=self.clear_current_records,
+            width=12
+        )
+        self.clear_current_button.pack(side='left')
 
     def create_port_grid(self):
         """创建端口网格区域"""
@@ -326,8 +390,82 @@ class PortGridWidget:
 
     def show_config(self):
         """显示配置对话框"""
-        # 这里应该调用配置对话框
-        messagebox.showinfo("配置", "配置对话框功能待实现")
+        try:
+            from ui.dialogs.config_dialog import ConfigDialog
+            dialog = ConfigDialog(self.parent)
+            result = dialog.show()
+            if result:
+                messagebox.showinfo("成功", "配置已保存")
+        except Exception as e:
+            messagebox.showerror("错误", f"打开配置对话框失败：{str(e)}")
+
+    def start_selected_ports(self):
+        """启动选中的端口"""
+        if not self.selected_ports:
+            messagebox.showwarning("警告", "请先选择要启动的端口")
+            return
+
+        if messagebox.askyesno("确认启动", f"确定要启动选中的 {len(self.selected_ports)} 个端口吗？"):
+            try:
+                # 这里应该调用端口服务启动端口
+                result = self.port_service.start_ports(list(self.selected_ports))
+                if result['success']:
+                    messagebox.showinfo("成功", f"已启动 {result.get('count', 0)} 个端口")
+                    self.refresh_ports()
+                else:
+                    messagebox.showerror("失败", result['message'])
+            except Exception as e:
+                messagebox.showerror("错误", f"启动端口失败：{str(e)}")
+
+    def stop_selected_ports(self):
+        """停止选中的端口"""
+        if not self.selected_ports:
+            messagebox.showwarning("警告", "请先选择要停止的端口")
+            return
+
+        if messagebox.askyesno("确认停止", f"确定要停止选中的 {len(self.selected_ports)} 个端口吗？"):
+            try:
+                # 这里应该调用端口服务停止端口
+                result = self.port_service.stop_ports(list(self.selected_ports))
+                if result['success']:
+                    messagebox.showinfo("成功", f"已停止 {result.get('count', 0)} 个端口")
+                    self.refresh_ports()
+                else:
+                    messagebox.showerror("失败", result['message'])
+            except Exception as e:
+                messagebox.showerror("错误", f"停止端口失败：{str(e)}")
+
+    def clear_all_records(self):
+        """清除全部端口记录"""
+        if messagebox.askyesno("确认清除", "确定要清除所有端口的发送记录吗？\n此操作不可恢复！"):
+            try:
+                # 这里应该调用端口服务清除所有记录
+                result = self.port_service.clear_all_records()
+                if result['success']:
+                    messagebox.showinfo("成功", "已清除所有端口记录")
+                    self.refresh_ports()
+                else:
+                    messagebox.showerror("失败", result['message'])
+            except Exception as e:
+                messagebox.showerror("错误", f"清除记录失败：{str(e)}")
+
+    def clear_current_records(self):
+        """清除当前选中端口的记录"""
+        if not self.selected_ports:
+            messagebox.showwarning("警告", "请先选择要清除记录的端口")
+            return
+
+        if messagebox.askyesno("确认清除", f"确定要清除选中的 {len(self.selected_ports)} 个端口的发送记录吗？\n此操作不可恢复！"):
+            try:
+                # 这里应该调用端口服务清除选中端口的记录
+                result = self.port_service.clear_ports_records(list(self.selected_ports))
+                if result['success']:
+                    messagebox.showinfo("成功", f"已清除 {result.get('count', 0)} 个端口的记录")
+                    self.refresh_ports()
+                else:
+                    messagebox.showerror("失败", result['message'])
+            except Exception as e:
+                messagebox.showerror("错误", f"清除记录失败：{str(e)}")
 
     def get_selected_ports(self):
         """获取选中的端口列表"""

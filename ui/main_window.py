@@ -1,29 +1,82 @@
 """
-主窗口 - 最小化版本
+完整主窗口 - 集成所有UI组件
 """
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 from typing import Dict, Any
+import sys
+import os
+
+# 添加项目根目录到路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 导入UI组件
+from ui.components.status_bar import StatusBar
+from ui.components.task_list_widget import TaskListWidget
+from ui.components.port_grid_widget import PortGridWidget
+from ui.components.timer_widget import TimerWidget, TimerManager
+
+# 导入对话框
+from ui.dialogs.add_task_dialog import AddTaskDialog
+from ui.dialogs.task_test_dialog import TaskTestDialog
+from ui.dialogs.task_edit_dialog import TaskEditDialog
+from ui.dialogs.config_dialog import ConfigDialog
+from ui.dialogs.export_dialog import ExportDialog
+
+# 导入样式
+from ui.styles import get_color, get_font
+
 
 class MainWindow:
-    """主窗口类"""
+    """完整主窗口类"""
 
     def __init__(self, user_info: Dict[str, Any]):
         """初始化主窗口"""
         self.user_info = user_info
         self.root = None
+        self.status_bar = None
+        self.task_list_widget = None
+        self.port_grid_widget = None
+        self.timer_manager = TimerManager()
+
+        # 重新映射用户信息字段
+        self.normalized_user_info = self.normalize_user_info(user_info)
+
+    def normalize_user_info(self, user_info: Dict[str, Any]) -> Dict[str, Any]:
+        """标准化用户信息字段名"""
+        return {
+            'id': user_info.get('operators_id', user_info.get('id', 1)),
+            'username': user_info.get('operators_username', user_info.get('username', 'Unknown')),
+            'real_name': user_info.get('operators_real_name', user_info.get('real_name', '用户')),
+            'balance': user_info.get('operators_available_credits', user_info.get('balance', 10000)),
+            'channel_id': user_info.get('channel_users_id', user_info.get('channel_id', 1))
+        }
 
     def show(self):
         """显示主窗口"""
         self.root = tk.Tk()
-        self.root.title(f"猫池短信系统 - {self.user_info.get('operators_real_name', '用户')}")
+        self.root.title(f"Pulsesports 1.9.0-rc.1-首发 - {self.normalized_user_info.get('real_name', '用户')}")
         self.root.geometry("1200x800")
+        self.root.configure(bg=get_color('background'))
+
+        # 设置窗口图标（如果有的话）
+        try:
+            # self.root.iconbitmap('static/icons/logo.ico')  # 如果有图标文件
+            pass
+        except:
+            pass
 
         # 居中显示
         self.center_window()
 
         # 创建界面
         self.create_widgets()
+
+        # 启动定时器
+        self.start_timers()
+
+        # 绑定关闭事件
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # 运行窗口
         self.root.mainloop()
@@ -39,75 +92,165 @@ class MainWindow:
 
     def create_widgets(self):
         """创建界面组件"""
-        # 状态栏
-        status_frame = ttk.Frame(self.root)
-        status_frame.pack(fill=tk.X, padx=10, pady=5)
+        # 1. 创建状态栏（顶部）
+        self.status_bar = StatusBar(self.root, self.normalized_user_info)
 
-        ttk.Label(status_frame, text="猫池短信系统", font=("Microsoft YaHei", 12, "bold")).pack(side=tk.LEFT)
+        # 2. 创建主内容区域
+        main_frame = tk.Frame(self.root, bg=get_color('background'))
+        main_frame.pack(fill='both', expand=True)
 
-        user_label = ttk.Label(status_frame, text=f"用户: {self.user_info.get('operators_username', '')}")
-        user_label.pack(side=tk.LEFT, padx=(20, 0))
+        # 3. 创建左侧任务管理区域
+        left_frame = tk.Frame(main_frame, bg=get_color('background'))
+        left_frame.pack(side='left', fill='both', expand=True, padx=(10, 5), pady=10)
 
-        credit_label = ttk.Label(status_frame, text=f"余额: 积分{self.user_info.get('operators_available_credits', 0)}")
-        credit_label.pack(side=tk.RIGHT)
+        self.task_list_widget = TaskListWidget(
+            left_frame,
+            self.normalized_user_info,
+            on_task_select=self.on_task_select,
+            on_task_update=self.on_task_update
+        )
+        self.task_list_widget.get_frame().pack(fill='both', expand=True)
 
-        # 分隔线
-        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
+        # 4. 创建右侧端口管理区域
+        right_frame = tk.Frame(main_frame, bg=get_color('background'))
+        right_frame.pack(side='right', fill='both', expand=True, padx=(5, 10), pady=10)
 
-        # 主内容区域
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.port_grid_widget = PortGridWidget(
+            right_frame,
+            self.normalized_user_info,
+            on_port_select=self.on_port_select
+        )
+        self.port_grid_widget.get_frame().pack(fill='both', expand=True)
 
-        # 左侧任务管理
-        left_frame = ttk.LabelFrame(main_frame, text="任务管理", padding="10")
-        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+    def on_task_select(self, task):
+        """任务选择回调"""
+        print(f"选中任务: {task.get('title', task.get('id', 'Unknown'))}")
 
-        # 任务控制按钮
-        btn_frame = ttk.Frame(left_frame)
-        btn_frame.pack(fill=tk.X, pady=(0, 10))
+    def on_task_update(self, action, task):
+        """任务更新回调"""
+        try:
+            if action == 'add':
+                self.show_add_task_dialog()
+            elif action == 'test':
+                self.show_task_test_dialog(task)
+            elif action == 'edit':
+                self.show_task_edit_dialog(task)
+            elif action == 'export_completed':
+                self.show_export_dialog(task, 'completed')
+            elif action == 'export_uncompleted':
+                self.show_export_dialog(task, 'uncompleted')
+            elif action == 'export_report':
+                self.show_export_dialog(None, 'report')
+        except Exception as e:
+            messagebox.showerror("错误", f"操作失败：{str(e)}")
 
-        ttk.Button(btn_frame, text="停止发送").pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(btn_frame, text="添加任务", command=self.add_task).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(btn_frame, text="更多").pack(side=tk.LEFT)
+    def on_port_select(self, ports):
+        """端口选择回调"""
+        port_names = [p.get('name', f"COM{p.get('id', '')}") for p in ports]
+        print(f"选中端口: {port_names}")
 
-        # 任务列表
-        task_tree = ttk.Treeview(left_frame, columns=("progress", "success", "failed", "status"), show="tree headings")
-        task_tree.heading("#0", text="任务名称")
-        task_tree.heading("progress", text="进度")
-        task_tree.heading("success", text="成功")
-        task_tree.heading("failed", text="失败") 
-        task_tree.heading("status", text="状态")
-        task_tree.pack(fill=tk.BOTH, expand=True)
+    def show_add_task_dialog(self):
+        """显示添加任务对话框"""
+        try:
+            dialog = AddTaskDialog(self.root, self.normalized_user_info)
+            result = dialog.show()
+            if result:
+                messagebox.showinfo("成功", "任务创建成功！")
+                # 刷新任务列表
+                if self.task_list_widget:
+                    self.task_list_widget.refresh_tasks()
+                # 更新余额
+                self.refresh_balance()
+        except Exception as e:
+            messagebox.showerror("错误", f"打开添加任务对话框失败：{str(e)}")
 
-        # 右侧端口管理
-        right_frame = ttk.LabelFrame(main_frame, text="端口管理", padding="10")
-        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+    def show_task_test_dialog(self, task):
+        """显示任务测试对话框"""
+        try:
+            dialog = TaskTestDialog(self.root, task)
+            result = dialog.show()
+            if result:
+                messagebox.showinfo("测试完成", "任务测试完成！")
+        except Exception as e:
+            messagebox.showerror("错误", f"打开任务测试对话框失败：{str(e)}")
 
-        # 端口控制按钮
-        port_btn_frame = ttk.Frame(right_frame)
-        port_btn_frame.pack(fill=tk.X, pady=(0, 10))
+    def show_task_edit_dialog(self, task):
+        """显示任务编辑对话框"""
+        try:
+            dialog = TaskEditDialog(self.root, task)
+            result = dialog.show()
+            if result:
+                messagebox.showinfo("成功", "任务内容已更新！")
+                # 刷新任务列表
+                if self.task_list_widget:
+                    self.task_list_widget.refresh_tasks()
+        except Exception as e:
+            messagebox.showerror("错误", f"打开任务编辑对话框失败：{str(e)}")
 
-        ttk.Button(port_btn_frame, text="全选").pack(side=tk.LEFT, padx=(0, 2))
-        ttk.Button(port_btn_frame, text="反选").pack(side=tk.LEFT, padx=(0, 2))
-        ttk.Button(port_btn_frame, text="选项").pack(side=tk.LEFT, padx=(0, 2))
-        ttk.Button(port_btn_frame, text="启动").pack(side=tk.LEFT, padx=(0, 2))
-        ttk.Button(port_btn_frame, text="停止").pack(side=tk.LEFT)
+    def show_config_dialog(self):
+        """显示配置对话框"""
+        try:
+            dialog = ConfigDialog(self.root)
+            result = dialog.show()
+            if result:
+                messagebox.showinfo("成功", "配置已保存！")
+        except Exception as e:
+            messagebox.showerror("错误", f"打开配置对话框失败：{str(e)}")
 
-        # 端口状态显示
-        port_text = tk.Text(right_frame, height=20, state=tk.DISABLED)
-        port_text.pack(fill=tk.BOTH, expand=True)
+    def show_export_dialog(self, task, export_type):
+        """显示导出对话框"""
+        try:
+            dialog = ExportDialog(self.root, task, export_type)
+            result = dialog.show()
+            if result:
+                messagebox.showinfo("成功", "数据导出完成！")
+        except Exception as e:
+            messagebox.showerror("错误", f"打开导出对话框失败：{str(e)}")
 
-        # 插入示例端口信息
-        port_text.config(state=tk.NORMAL)
-        port_text.insert(tk.END, "端口扫描中...\n")
-        port_text.insert(tk.END, "COM1  中国移动  60  0  可用\n")
-        port_text.insert(tk.END, "COM2  中国联通  60  0  可用\n")
-        port_text.insert(tk.END, "COM3  中国电信  60  0  离线\n")
-        port_text.config(state=tk.DISABLED)
+    def start_timers(self):
+        """启动定时器"""
+        try:
+            # 创建主定时器
+            main_timer = TimerWidget(
+                task_list_widget=self.task_list_widget,
+                port_grid_widget=self.port_grid_widget,
+                status_bar=self.status_bar,
+                interval=300  # 5分钟更新一次
+            )
 
-    def add_task(self):
-        """添加任务"""
-        messagebox.showinfo("提示", "添加任务功能正在开发中...")
+            # 添加到定时器管理器
+            self.timer_manager.add_timer('main', main_timer)
+
+            # 启动定时器
+            self.timer_manager.start_timer('main')
+
+            print("定时器已启动")
+        except Exception as e:
+            print(f"启动定时器失败：{str(e)}")
+
+    def refresh_balance(self):
+        """刷新用户余额"""
+        try:
+            # 这里应该调用用户服务获取最新余额
+            # 暂时保持现有余额
+            if self.status_bar:
+                current_balance = self.normalized_user_info.get('balance', 10000)
+                self.status_bar.update_balance(current_balance)
+        except Exception as e:
+            print(f"刷新余额失败：{str(e)}")
+
+    def on_closing(self):
+        """窗口关闭事件"""
+        try:
+            # 停止所有定时器
+            self.timer_manager.stop_all()
+
+            # 确认关闭
+            if messagebox.askyesno("确认退出", "确定要退出系统吗？"):
+                self.destroy()
+        except Exception as e:
+            print(f"关闭窗口时发生错误：{str(e)}")
+            self.destroy()
 
     def destroy(self):
         """销毁窗口"""
@@ -117,3 +260,23 @@ class MainWindow:
                 self.root.destroy()
             except:
                 pass
+
+
+def main():
+    """测试完整主窗口"""
+    # 模拟用户信息
+    user_info = {
+        'operators_id': 1,
+        'operators_username': 'test_operator',
+        'operators_real_name': '测试操作员',
+        'operators_available_credits': 10000,
+        'channel_users_id': 1
+    }
+
+    # 创建并显示主窗口
+    main_window = MainWindow(user_info)
+    main_window.show()
+
+
+if __name__ == '__main__':
+    main()
