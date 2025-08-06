@@ -50,7 +50,7 @@ class MainWindow:
     def show(self):
         """显示主窗口"""
         self.root = tk.Tk()
-        self.root.title(f"Pulsesports 1.9.0-rc.1-首发 - 测试操作员")
+        self.root.title(f"JlmisPlus 1.015 - 测试学习系统")
         self.root.geometry("1400x900")
         self.root.configure(bg=get_color('background'))
 
@@ -164,7 +164,7 @@ class MainWindow:
         # 版本信息
         version_label = tk.Label(
             bottom_frame,
-            text="Pulsesports v1.9.0-rc.1 | 就绪",
+            text="JlmisPlus 1.015",
             font=get_font('small'),
             fg=get_color('text_light'),
             bg=get_color('gray_light')
@@ -331,7 +331,7 @@ class MainWindow:
             self.timer_manager.stop_all()
 
             # 确认关闭
-            if messagebox.askyesno("确认退出", "确定要退出 Pulsesports 系统吗？"):
+            if messagebox.askyesno("确认退出", "确定要退出 JlmisPlus 系统吗？"):
                 self.destroy()
         except Exception as e:
             print(f"关闭窗口时发生错误：{str(e)}")

@@ -18,8 +18,8 @@ class LoginWindow:
     def show(self) -> Optional[Dict[str, Any]]:
         """显示登录窗口"""
         self.root = tk.Tk()
-        self.root.title("猫池短信系统 - 用户登录")
-        self.root.geometry("400x300")
+        self.root.title("用户登录")
+        self.root.geometry("400x350")
         self.root.resizable(False, False)
 
         # 居中显示
@@ -49,24 +49,47 @@ class LoginWindow:
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # 标题
-        title_label = ttk.Label(main_frame, text="猫池短信系统", font=("Microsoft YaHei", 16, "bold"))
+        title_label = ttk.Label(main_frame, text="JlmisPlus 测试系统", font=("Microsoft YaHei", 20, "bold"))
         title_label.pack(pady=(0, 20))
 
         # 用户名
-        ttk.Label(main_frame, text="用户名:").pack(anchor=tk.W)
+        ttk.Label(main_frame, text="用户名:", font=('Microsoft YaHei', 16)).pack(anchor=tk.W)
         self.username_var = tk.StringVar(value="test_operator")
-        username_entry = ttk.Entry(main_frame, textvariable=self.username_var, width=30)
-        username_entry.pack(fill=tk.X, pady=(5, 10))
+        username_entry = ttk.Entry(
+            main_frame,
+            textvariable=self.username_var,
+            width=30,
+            font=('Microsoft YaHei', 14)  # 增大字体
+        )
+        username_entry.pack(fill=tk.X, pady=(5, 10), ipady=8)  # ipady增加内部垂直间距
 
         # 密码
-        ttk.Label(main_frame, text="密码:").pack(anchor=tk.W)
+        ttk.Label(main_frame, text="密 码:", font=('Microsoft YaHei', 16)).pack(anchor=tk.W)
         self.password_var = tk.StringVar(value="123456")
-        password_entry = ttk.Entry(main_frame, textvariable=self.password_var, show="*", width=30)
-        password_entry.pack(fill=tk.X, pady=(5, 20))
+        password_entry = ttk.Entry(
+            main_frame,
+            textvariable=self.password_var,
+            show="*",
+            width=30,
+            font=('Microsoft YaHei', 14)  # 增大字体
+        )
+        password_entry.pack(fill=tk.X, pady=(5, 20), ipady=8)  # ipady增加内部垂直间距
 
-        # 登录按钮
-        login_btn = ttk.Button(main_frame, text="登录", command=self.login)
-        login_btn.pack(pady=10)
+        # 登录按钮 - 同样增加高度
+        login_btn = tk.Button(
+            main_frame,
+            text="登录",
+            command=self.login,
+            font=('Microsoft YaHei', 15, 'bold'),  # 可以直接使用font参数
+            bg='#f0f0f0',  # 背景色
+            fg='#333333',  # 文字颜色
+            relief='raised',  # 按钮样式
+            bd=1,  # 边框宽度
+            cursor='hand2',  # 鼠标悬停样式
+            padx=30,  # 水平内边距
+            pady=8  # 垂直内边距
+        )
+        login_btn.pack(pady=20)
 
         # 绑定回车键
         self.root.bind('<Return>', lambda e: self.login())

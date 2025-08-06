@@ -31,20 +31,20 @@ ORANGE_THEME = {
         'grid_line': '#F5F5F5',    # 网格线色
     },
     'fonts': {
-        'default': ('Microsoft YaHei', 10),      # 增大默认字体
-        'title': ('Microsoft YaHei', 14, 'bold'),
-        'subtitle': ('Microsoft YaHei', 12, 'bold'),
-        'button': ('Microsoft YaHei', 10, 'bold'), # 增大按钮字体
-        'small': ('Microsoft YaHei', 9),          # 增大小字体
-        'large': ('Microsoft YaHei', 16, 'bold'),
-        'medium': ('Microsoft YaHei', 11),        # 新增中等字体
+        'default': ('Microsoft YaHei', 20),      # 增大默认字体
+        'title': ('Microsoft YaHei', 26, 'bold'),
+        'subtitle': ('Microsoft YaHei', 16, 'bold'),
+        'button': ('Microsoft YaHei', 20, 'bold'), # 增大按钮字体
+        'large': ('Microsoft YaHei', 32, 'bold'),
+        'medium': ('Microsoft YaHei', 20),        # 新增中等字体
+        'small': ('Microsoft YaHei', 16),          # 增大小字体
     },
     'spacing': {
-        'xs': 4,    # 小间距
-        'sm': 8,    # 标准间距
-        'md': 16,   # 中等间距
-        'lg': 24,   # 大间距
-        'xl': 32    # 特大间距
+        'xs': 2,    # 小间距
+        'sm': 6,    # 标准间距
+        'md': 12,   # 中等间距
+        'lg': 20,   # 大间距
+        'xl': 30    # 特大间距
     }
 }
 
@@ -67,7 +67,7 @@ def create_modern_button(parent, text, style="primary", command=None, width=None
     styles = {
         'primary': {
             'bg': get_color('primary'),           # 橙色背景 #FF7043
-            'fg': '#FFFFFF',                      # 纯白色文字 - 确保高对比度 ✅
+            'fg': '#000000',                      # 纯白色文字 - 确保高对比度 ✅
             'active_bg': get_color('primary_dark'),
             'hover_bg': get_color('primary_hover'),
             'border_color': get_color('primary_dark')
@@ -81,8 +81,8 @@ def create_modern_button(parent, text, style="primary", command=None, width=None
         },
         'success': {
             'bg': get_color('success'),           # 绿色背景 #4CAF50
-            'fg': '#FFFFFF',                      # 纯白色文字 - 确保高对比度 ✅
-            'active_bg': '#388E3C',
+            'fg': '#000000',                      # 纯白色文字 - 确保高对比度 ✅
+            'active_bg': '#4CAF50',
             'hover_bg': '#45A049',
             'border_color': get_color('success')
         },

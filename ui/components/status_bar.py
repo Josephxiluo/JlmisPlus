@@ -31,7 +31,7 @@ class StatusBar:
         self.frame = tk.Frame(
             self.parent,
             bg=get_color('primary'),
-            height=65  # 增加高度确保内容显示
+            height=140  # 增加高度确保内容显示
         )
         self.frame.pack(fill='x', side='top')
         self.frame.pack_propagate(False)  # 重要：禁用自动调整大小
@@ -55,16 +55,6 @@ class StatusBar:
         logo_container = tk.Frame(left_frame, bg=get_color('primary'))
         logo_container.pack(side='left', pady=get_spacing('sm'))
 
-        # Logo图标
-        logo_icon = tk.Label(
-            logo_container,
-            text="📱",
-            font=('Microsoft YaHei', 18),  # 稍微小一点
-            fg='white',
-            bg=get_color('primary')
-        )
-        logo_icon.pack(side='left')
-
         # Logo文字和副标题容器
         text_container = tk.Frame(logo_container, bg=get_color('primary'))
         text_container.pack(side='left', padx=(get_spacing('sm'), 0))
@@ -72,8 +62,8 @@ class StatusBar:
         # Logo主标题
         logo_label = tk.Label(
             text_container,
-            text="Pulse",
-            font=('Microsoft YaHei', 15, 'bold'),  # 稍微调整大小
+            text="JlmisPlus 测试系统",
+            font=get_font('title'),
             fg='white',
             bg=get_color('primary')
         )
@@ -82,12 +72,12 @@ class StatusBar:
         # 副标题
         subtitle_label = tk.Label(
             text_container,
-            text="仅供测试研究，严禁用于违法用途",
-            font=get_font('small'),
+            text="本软件仅供技术测试研究，严禁用于违法用途",
+            font=get_font('subtitle'),
             fg='white',
             bg=get_color('primary')
         )
-        subtitle_label.pack(anchor='w')
+        subtitle_label.pack(anchor='w', pady=(2, 0))  # 添加间距
 
     def create_right_section(self, parent):
         """创建右侧用户信息和积分区域 - 修复积分显示问题"""
@@ -96,7 +86,7 @@ class StatusBar:
 
         # 信息容器 - 垂直布局，确保所有内容都能显示
         info_container = tk.Frame(right_frame, bg=get_color('primary'))
-        info_container.pack(side='right', fill='y', expand=True)
+        info_container.pack(side='right', pady=get_spacing('sm'))
 
         # 用户信息行
         if self.user_info.get('username'):
@@ -107,18 +97,18 @@ class StatusBar:
             status_indicator = tk.Label(
                 user_frame,
                 text="● ",
-                font=('Microsoft YaHei', 10),
+                font=get_font('medium'),
                 fg='#4CAF50',  # 绿色在线状态
                 bg=get_color('primary')
             )
             status_indicator.pack(side='left')
 
             # 用户信息
-            user_text = f"欢迎，{self.user_info.get('real_name', self.user_info['username'])}"
+            user_text = f"{self.user_info.get('real_name', self.user_info['username'])}   {self.get_current_time()}"
             user_label = tk.Label(
                 user_frame,
                 text=user_text,
-                font=get_font('medium'),
+                font=get_font('small'),
                 fg='white',
                 bg=get_color('primary')
             )
@@ -145,7 +135,7 @@ class StatusBar:
         balance_icon = tk.Label(
             badge_container,
             text="💎",  # 更醒目的钻石图标
-            font=('Microsoft YaHei', 16),  # 增大图标
+            font=('Microsoft YaHei', 14),  # 增大图标
             fg=get_color('warning'),
             bg='#FFE0B2'
         )
@@ -162,22 +152,9 @@ class StatusBar:
         )
         self.balance_label.pack(side='left', padx=(get_spacing('sm'), 0))
 
-        # 时间信息行
-        time_frame = tk.Frame(info_container, bg=get_color('primary'))
-        time_frame.pack(anchor='e', pady=(get_spacing('xs'), 0))
-
-        self.time_label = tk.Label(
-            time_frame,
-            text=self.get_current_time(),
-            font=get_font('small'),
-            fg='white',
-            bg=get_color('primary')
-        )
-        self.time_label.pack(side='right')
-
     def get_current_time(self):
         """获取当前时间"""
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.now().strftime("%H:%M")
 
     def start_time_update(self):
         """开始时间更新"""
@@ -242,17 +219,6 @@ def main():
         root.after(3000, test_balance_update)
 
     root.after(2000, test_balance_update)
-
-    # 显示说明
-    info_label = tk.Label(
-        root,
-        text="✅ 修复项目:\n• 修复积分显示不见的问题\n• 增大积分徽章和字体\n• 使用更醒目的颜色和图标\n• 固定状态栏高度防止被压缩",
-        font=get_font('default'),
-        fg=get_color('text'),
-        bg=get_color('background'),
-        justify='left'
-    )
-    info_label.pack(pady=20)
 
     root.mainloop()
 
