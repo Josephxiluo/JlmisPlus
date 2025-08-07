@@ -28,7 +28,7 @@ except ImportError:
     class MockSettings:
         DB_HOST = 'localhost'
         DB_PORT = 5432
-        DB_NAME = 'sms_pool_system'
+        DB_NAME = 'sms_pool_db'
         DB_USER = 'postgres'
         DB_PASSWORD = 'password'
         DB_CHARSET = 'utf8'

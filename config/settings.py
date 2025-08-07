@@ -61,7 +61,7 @@ class Settings:
         """数据库配置"""
         self.DB_HOST = os.getenv('DB_HOST', 'localhost')
         self.DB_PORT = int(os.getenv('DB_PORT', '5432'))
-        self.DB_NAME = os.getenv('DB_NAME', 'sms_pool_system')
+        self.DB_NAME = os.getenv('DB_NAME', 'sms_pool_db')
         self.DB_USER = os.getenv('DB_USER', 'postgres')
         self.DB_PASSWORD = os.getenv('DB_PASSWORD', 'password')
         self.DB_CHARSET = os.getenv('DB_CHARSET', 'utf8')
