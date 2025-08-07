@@ -2,10 +2,10 @@
 -- 支持三层架构：总管理员 -> 渠道管理员 -> 渠道操作用户
 
 -- 创建数据库
--- CREATE DATABASE sms_pool_system;
+-- CREATE DATABASE sms_pool_db;
 
 -- 使用数据库
--- \c sms_pool_system;
+-- \c sms_pool_db;
 
 -- 创建序列和扩展
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
