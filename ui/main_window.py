@@ -1,6 +1,7 @@
 """
-优化后的主窗口 - 添加可调整大小的分割窗口
+修复版现代化主窗口 - 可调整的分割窗口
 """
+import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox
 from typing import Dict, Any
@@ -10,8 +11,8 @@ import os
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 导入优化后的UI组件
-from ui.styles import get_color, get_font, get_spacing, create_resizable_paned_window
+# 导入现代化UI组件
+from ui.styles import get_color, get_font, get_spacing, create_label
 from ui.components.timer_widget import TimerWidget, TimerManager
 
 # 导入对话框
@@ -23,7 +24,7 @@ from ui.dialogs.export_dialog import ExportDialog
 
 
 class MainWindow:
-    """优化后的主窗口类 - 支持左右分割窗口调整"""
+    """修复版现代化主窗口类 - 可调整分割窗口"""
 
     def __init__(self, user_info: Dict[str, Any]):
         """初始化主窗口"""
@@ -49,25 +50,18 @@ class MainWindow:
 
     def show(self):
         """显示主窗口"""
-        self.root = tk.Tk()
+        self.root = ctk.CTk()
         self.root.title(f"JlmisPlus 1.015 - 测试学习系统")
         self.root.geometry("1400x900")
-        self.root.configure(bg=get_color('background'))
+        self.root.configure(fg_color=get_color('background'))
 
         # 设置最小窗口大小
         self.root.minsize(1200, 800)
 
-        # 设置窗口图标（如果有的话）
-        try:
-            # self.root.iconbitmap('static/icons/logo.ico')  # 如果有图标文件
-            pass
-        except:
-            pass
-
         # 居中显示
         self.center_window()
 
-        # 创建界面
+        # 创建现代化界面
         self.create_widgets()
 
         # 启动定时器
@@ -89,27 +83,54 @@ class MainWindow:
         self.root.geometry(f"{width}x{height}+{x}+{y}")
 
     def create_widgets(self):
-        """创建优化后的界面组件"""
+        """创建现代化界面组件"""
         # 1. 创建状态栏（顶部）
         from ui.components.status_bar import StatusBar
         self.status_bar = StatusBar(self.root, self.normalized_user_info)
 
         # 2. 创建主内容区域容器
-        main_container = tk.Frame(self.root, bg=get_color('background'))
+        main_container = ctk.CTkFrame(self.root, fg_color='transparent')
         main_container.pack(fill='both', expand=True)
 
         # 添加内边距容器
-        content_frame = tk.Frame(main_container, bg=get_color('background'))
+        content_frame = ctk.CTkFrame(main_container, fg_color='transparent')
         content_frame.pack(fill='both', expand=True,
                           padx=get_spacing('lg'), pady=get_spacing('md'))
 
-        # 3. 创建可调整大小的分割窗口
-        self.paned_window = create_resizable_paned_window(content_frame, orientation='horizontal')
+        # 3. 创建可调整的分割窗口布局（使用原生tkinter的PanedWindow）
+        self.create_resizable_paned_layout(content_frame)
+
+        # 4. 添加底部状态信息
+        self.create_bottom_status()
+
+    def create_resizable_paned_layout(self, parent):
+        """创建可调整大小的分割窗口布局"""
+        # 使用tkinter的PanedWindow来实现可拖拽调整
+        self.paned_window = tk.PanedWindow(
+            parent,
+            orient=tk.HORIZONTAL,
+            sashwidth=8,
+            sashrelief='flat',
+            sashpad=2,
+            bg=get_color('background'),
+            bd=0,
+            relief='flat'
+        )
         self.paned_window.pack(fill='both', expand=True)
 
-        # 4. 创建左侧任务管理区域
-        left_container = tk.Frame(self.paned_window, bg=get_color('background'))
+        # 左侧面板容器（任务管理）
+        left_container = ctk.CTkFrame(
+            self.paned_window,
+            fg_color='transparent'
+        )
 
+        # 右侧面板容器（端口管理）
+        right_container = ctk.CTkFrame(
+            self.paned_window,
+            fg_color='transparent'
+        )
+
+        # 创建任务列表组件
         from ui.components.task_list_widget import TaskListWidget
         self.task_list_widget = TaskListWidget(
             left_container,
@@ -119,9 +140,7 @@ class MainWindow:
         )
         self.task_list_widget.get_frame().pack(fill='both', expand=True)
 
-        # 5. 创建右侧端口管理区域
-        right_container = tk.Frame(self.paned_window, bg=get_color('background'))
-
+        # 创建端口网格组件
         from ui.components.port_grid_widget import PortGridWidget
         self.port_grid_widget = PortGridWidget(
             right_container,
@@ -130,66 +149,69 @@ class MainWindow:
         )
         self.port_grid_widget.get_frame().pack(fill='both', expand=True)
 
-        # 6. 将左右容器添加到分割窗口
-        self.paned_window.add(left_container, minsize=400)  # 左侧最小宽度400px
-        self.paned_window.add(right_container, minsize=600)  # 右侧最小宽度600px
+        # 添加到分割窗口
+        self.paned_window.add(left_container, minsize=500)  # 左侧最小400px
+        self.paned_window.add(right_container, minsize=500)  # 右侧最小600px
 
-        # 7. 设置初始分割比例（左侧40%，右侧60%）
-        self.root.after(100, self.set_initial_sash_position)
+        # 设置初始分割位置（左侧50%，右侧50%）
+        self.root.after(100, self.set_initial_paned_position)
 
-        # 8. 添加底部状态信息
-        self.create_bottom_status()
-
-    def set_initial_sash_position(self):
-        """设置初始分割条位置"""
+    def set_initial_paned_position(self):
+        """设置初始分割位置"""
         try:
             # 获取窗口宽度
             total_width = self.paned_window.winfo_width()
             if total_width > 100:  # 确保窗口已经完全加载
-                # 设置左侧占40%
-                left_width = int(total_width * 0.4)
+                # 设置左侧占50%
+                left_width = int(total_width * 0.5)
                 self.paned_window.sash_place(0, left_width, 0)
             else:
                 # 如果窗口还没完全加载，延迟执行
-                self.root.after(100, self.set_initial_sash_position)
-        except:
-            pass
+                self.root.after(100, self.set_initial_paned_position)
+        except Exception as e:
+            print(f"设置分割位置时发生错误: {e}")
 
     def create_bottom_status(self):
-        """创建底部状态信息"""
-        bottom_frame = tk.Frame(self.root, bg=get_color('gray_light'), height=25)
+        """创建现代化底部状态栏"""
+        bottom_frame = ctk.CTkFrame(
+            self.root,
+            fg_color=get_color('gray_light'),
+            corner_radius=0,
+            height=30
+        )
         bottom_frame.pack(fill='x', side='bottom')
         bottom_frame.pack_propagate(False)
 
-        # 版本信息
-        version_label = tk.Label(
-            bottom_frame,
-            text="JlmisPlus 1.015",
-            font=get_font('small'),
-            fg=get_color('text_light'),
-            bg=get_color('gray_light')
-        )
-        version_label.pack(side='left', padx=get_spacing('md'), pady=get_spacing('xs'))
+        # 底部状态容器
+        status_container = ctk.CTkFrame(bottom_frame, fg_color='transparent')
+        status_container.pack(fill='both', expand=True, padx=get_spacing('md'), pady=get_spacing('xs'))
 
-        # 分割窗口提示信息
-        resize_hint = tk.Label(
-            bottom_frame,
-            text="💡 可拖拽中间分割线调整左右窗口大小",
-            font=get_font('small'),
-            fg=get_color('primary'),
-            bg=get_color('gray_light')
+        # 版本信息（左侧）
+        version_label = create_label(
+            status_container,
+            text="JlmisPlus 1.015 - CustomTkinter现代化版本",
+            style="small"
         )
-        resize_hint.pack(side='left', padx=get_spacing('lg'))
+        version_label.configure(text_color=get_color('text_light'))
+        version_label.pack(side='left')
 
-        # 连接状态
-        self.connection_status = tk.Label(
-            bottom_frame,
+        # 拖拽提示（中间）
+        hint_label = create_label(
+            status_container,
+            text="💡 拖拽中间分割线可调整左右面板大小",
+            style="small"
+        )
+        hint_label.configure(text_color=get_color('primary'))
+        hint_label.pack(side='left', padx=get_spacing('xl'))
+
+        # 连接状态（右侧）
+        self.connection_status = create_label(
+            status_container,
             text="🟢 已连接",
-            font=get_font('small'),
-            fg=get_color('success'),
-            bg=get_color('gray_light')
+            style="small"
         )
-        self.connection_status.pack(side='right', padx=get_spacing('md'), pady=get_spacing('xs'))
+        self.connection_status.configure(text_color=get_color('success'))
+        self.connection_status.pack(side='right')
 
     def on_task_select(self, task):
         """任务选择回调"""
@@ -277,8 +299,55 @@ class MainWindow:
             messagebox.showerror("错误", f"打开导出对话框失败：{str(e)}")
 
     def show_success_message(self, message):
-        """显示成功消息"""
-        messagebox.showinfo("成功", message)
+        """显示成功消息 - 使用现代化消息框"""
+        # 创建现代化成功提示窗口
+        success_window = ctk.CTkToplevel(self.root)
+        success_window.title("操作成功")
+        success_window.geometry("350x150")
+        success_window.configure(fg_color=get_color('background'))
+        success_window.transient(self.root)
+        success_window.grab_set()
+
+        # 居中显示
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 175
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 75
+        success_window.geometry(f"350x150+{x}+{y}")
+
+        # 成功图标和消息
+        content_frame = ctk.CTkFrame(success_window, fg_color='transparent')
+        content_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        # 成功图标
+        icon_label = create_label(
+            content_frame,
+            text="✅",
+            style="large"
+        )
+        icon_label.pack(pady=(0, 10))
+
+        # 成功消息
+        message_label = create_label(
+            content_frame,
+            text=message,
+            style="default"
+        )
+        message_label.pack(pady=(0, 15))
+
+        # 确定按钮
+        ok_button = ctk.CTkButton(
+            content_frame,
+            text="确定",
+            command=success_window.destroy,
+            font=get_font('button'),
+            fg_color=get_color('success'),
+            hover_color='#45A049',
+            width=100,
+            height=32
+        )
+        ok_button.pack()
+
+        # 3秒后自动关闭
+        success_window.after(3000, success_window.destroy)
 
     def start_timers(self):
         """启动定时器"""
@@ -314,14 +383,14 @@ class MainWindow:
         """更新连接状态"""
         if hasattr(self, 'connection_status'):
             if connected:
-                self.connection_status.config(
+                self.connection_status.configure(
                     text="🟢 已连接",
-                    fg=get_color('success')
+                    text_color=get_color('success')
                 )
             else:
-                self.connection_status.config(
+                self.connection_status.configure(
                     text="🔴 连接断开",
-                    fg=get_color('danger')
+                    text_color=get_color('danger')
                 )
 
     def on_closing(self):
@@ -348,7 +417,7 @@ class MainWindow:
 
 
 def main():
-    """测试优化后的主窗口"""
+    """测试现代化主窗口"""
     # 模拟用户信息
     user_info = {
         'operators_id': 1,
