@@ -175,11 +175,11 @@ class TaskListWidget:
 
         # 列标题定义 - 使用固定像素宽度确保对齐
         columns = [
-            ("任务", 250),  # 固定150px
-            ("进度", 100),  # 固定100px
-            ("成功", 80),  # 固定50px
-            ("失败", 80),  # 固定50px
-            ("状态", 80),  # 固定60px
+            ("任务", 160),  # 固定150px
+            ("进度", 80),  # 固定100px
+            ("成功", 60),  # 固定50px
+            ("失败", 60),  # 固定50px
+            ("状态", 60),  # 固定60px
             ("操作", None)  # 占用剩余空间
         ]
 
@@ -257,7 +257,7 @@ class TaskListWidget:
         content_container.pack(fill='both', expand=True, padx=get_spacing('md'), pady=get_spacing('sm'))
 
         # 任务名称列 - 与表头对齐：150px
-        name_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=230)
+        name_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=140)
         name_frame.pack(side='left', fill='y', padx=1)
         name_frame.pack_propagate(False)
 
@@ -270,7 +270,7 @@ class TaskListWidget:
         name_label.pack(fill='both', expand=True, padx=(0, get_spacing('sm')))
 
         # 进度列 - 与表头对齐：100px
-        progress_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=100)
+        progress_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=80)
         progress_frame.pack(side='left', fill='y', padx=1)
         progress_frame.pack_propagate(False)
 
@@ -307,7 +307,7 @@ class TaskListWidget:
         progress_bar.set(progress / 100.0)
 
         # 成功列 - 与表头对齐：50px
-        success_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=80)
+        success_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=60)
         success_frame.pack(side='left', fill='y', padx=1)
         success_frame.pack_propagate(False)
 
@@ -320,7 +320,7 @@ class TaskListWidget:
         self.success_label.pack(anchor='center', expand=True)
 
         # 失败列 - 与表头对齐：50px
-        failed_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=80)
+        failed_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=60)
         failed_frame.pack(side='left', fill='y', padx=1)
         failed_frame.pack_propagate(False)
 
@@ -333,7 +333,7 @@ class TaskListWidget:
         self.failed_label.pack(anchor='center', expand=True)
 
         # 状态列 - 与表头对齐：60px
-        status_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=80)
+        status_frame = ctk.CTkFrame(content_container, fg_color='transparent', width=60)
         status_frame.pack(side='left', fill='y', padx=1)
         status_frame.pack_propagate(False)
 

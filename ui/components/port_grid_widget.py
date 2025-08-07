@@ -242,7 +242,7 @@ class PortGridWidget:
             return
 
         # 计算列数（根据容器宽度自动调整）
-        cols = 3  # 默认3列，可以根据实际情况调整
+        cols = 2  # 默认3列，可以根据实际情况调整
 
         # 创建端口网格
         for i, port in enumerate(self.ports_data):

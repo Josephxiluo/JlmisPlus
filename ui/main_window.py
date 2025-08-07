@@ -150,8 +150,8 @@ class MainWindow:
         self.port_grid_widget.get_frame().pack(fill='both', expand=True)
 
         # 添加到分割窗口
-        self.paned_window.add(left_container, minsize=500)  # 左侧最小400px
-        self.paned_window.add(right_container, minsize=500)  # 右侧最小600px
+        self.paned_window.add(left_container, minsize=650)  # 左侧最小400px
+        self.paned_window.add(right_container, minsize=350)  # 右侧最小600px
 
         # 设置初始分割位置（左侧50%，右侧50%）
         self.root.after(100, self.set_initial_paned_position)
