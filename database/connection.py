@@ -296,8 +296,48 @@ def get_db_connection():
     """兼容性函数 - 返回连接对象"""
     return DatabaseConnectionWrapper()
 
+
 class DatabaseConnectionWrapper:
     """数据库连接包装器 - 提供兼容的接口"""
+
+    def __init__(self):
+        self._conn = None
+        self._in_transaction = False
+
+    def cursor(self):
+        """获取游标 - 兼容原生连接接口"""
+        if not self._conn:
+            self._conn = get_connection()
+        return self._conn.cursor()
+
+    def commit(self):
+        """提交事务"""
+        if self._conn:
+            self._conn.commit()
+
+    def rollback(self):
+        """回滚事务"""
+        if self._conn:
+            self._conn.rollback()
+
+    def close(self):
+        """关闭连接"""
+        if self._conn:
+            self._conn.close()
+            self._conn = None
+
+    def __enter__(self):
+        """上下文管理器入口"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器出口"""
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+        return False
 
     def execute_query(self, query, params=None, fetch_one=False, dict_cursor=False):
         return execute_query(query, params, fetch_one, dict_cursor)

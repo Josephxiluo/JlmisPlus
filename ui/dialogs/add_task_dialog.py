@@ -526,76 +526,87 @@ class AddTaskDialog:
         }
 
     def save_task_to_database(self, task_data, status='draft'):
-        """保存任务到数据库 - 修复版本"""
+        """保存任务到数据库 - 改进版本"""
+        conn = None
+        cursor = None
+
         try:
             from database.connection import get_db_connection
             from datetime import datetime
 
+            # 获取数据库连接
             conn = get_db_connection()
+
+            # 检查连接对象是否有效
+            if not hasattr(conn, 'cursor'):
+                # 如果是包装器对象但没有cursor方法，尝试直接获取连接
+                from database.connection import get_connection
+                conn = get_connection()
+
             cursor = conn.cursor()
 
-            try:
-                # 插入任务并获取ID
-                insert_query = """
-                INSERT INTO tasks (
-                    tasks_title, tasks_mode, tasks_subject_name, tasks_message_content,
-                    templates_id, tasks_total_count, tasks_status, 
-                    operators_id, channel_users_id, created_time
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING tasks_id
-                """
+            # 插入任务并获取ID
+            insert_query = """
+            INSERT INTO tasks (
+                tasks_title, tasks_mode, tasks_subject_name, tasks_message_content,
+                templates_id, tasks_total_count, tasks_status, 
+                operators_id, channel_users_id, created_time
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING tasks_id
+            """
 
-                params = (
-                    task_data['title'],
-                    task_data['mode'],
-                    task_data.get('subject', ''),
-                    task_data['message_content'],
-                    task_data.get('templates_id'),
-                    len(task_data['targets']),
-                    status,
-                    task_data['operators_id'],
-                    task_data['channel_users_id'],
-                    datetime.now()
-                )
+            params = (
+                task_data['title'],
+                task_data['mode'],
+                task_data.get('subject', ''),
+                task_data['message_content'],
+                task_data.get('templates_id'),
+                len(task_data['targets']),
+                status,
+                task_data['operators_id'],
+                task_data['channel_users_id'],
+                datetime.now()
+            )
 
-                cursor.execute(insert_query, params)
-                result = cursor.fetchone()
+            cursor.execute(insert_query, params)
+            result = cursor.fetchone()
 
-                if result:
-                    task_id = result[0]
-                    print(f"[DEBUG] 任务创建成功，ID: {task_id}")
+            if result:
+                task_id = result[0]
+                print(f"[DEBUG] 任务创建成功，ID: {task_id}")
 
-                    # 批量插入消息详情
-                    if task_data['targets']:
-                        message_query = """
-                        INSERT INTO task_message_details (
-                            tasks_id, recipient_number, details_status, created_time
-                        ) VALUES (%s, %s, %s, %s)
-                        """
+                # 批量插入消息详情
+                if task_data['targets']:
+                    message_query = """
+                    INSERT INTO task_message_details (
+                        tasks_id, recipient_number, details_status, created_time
+                    ) VALUES (%s, %s, %s, %s)
+                    """
 
-                        for phone in task_data['targets']:
-                            cursor.execute(message_query, (task_id, phone, 'pending', datetime.now()))
+                    for phone in task_data['targets']:
+                        cursor.execute(message_query, (task_id, phone, 'pending', datetime.now()))
 
-                        print(f"[DEBUG] 插入了 {len(task_data['targets'])} 条消息详情")
+                    print(f"[DEBUG] 插入了 {len(task_data['targets'])} 条消息详情")
 
-                    # 提交事务
-                    conn.commit()
-                    return {'success': True, 'task_id': task_id, 'message': '任务保存成功'}
-                else:
-                    conn.rollback()
-                    return {'success': False, 'message': '任务保存失败'}
-
-            except Exception as e:
+                # 提交事务
+                conn.commit()
+                return {'success': True, 'task_id': task_id, 'message': '任务保存成功'}
+            else:
                 conn.rollback()
-                print(f"[ERROR] 数据库操作失败: {e}")
-                return {'success': False, 'message': f'数据库保存失败: {str(e)}'}
-            finally:
-                cursor.close()
-                conn.close()
+                return {'success': False, 'message': '任务保存失败'}
 
         except Exception as e:
-            print(f"[ERROR] 连接数据库失败: {e}")
-            return {'success': False, 'message': f'数据库连接失败: {str(e)}'}
+            if conn:
+                conn.rollback()
+            print(f"[ERROR] 数据库操作失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'message': f'数据库保存失败: {str(e)}'}
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     def save(self):
         """保存任务"""
