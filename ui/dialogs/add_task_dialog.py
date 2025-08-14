@@ -47,7 +47,8 @@ class AddTaskDialog:
         self.target_file_path = None
         self.message_templates = []
         self.create_dialog()
-        self.load_message_templates()
+        # 加载默认的短信模板
+        self.load_message_templates(template_type='sms')
 
     def create_dialog(self):
         """创建对话框"""
@@ -91,7 +92,7 @@ class AddTaskDialog:
         """创建滚动内容区域"""
         # 内容框架（留出底部按钮空间）
         content_frame = tk.Frame(parent, bg=get_color('background'))
-        content_frame.pack(fill='both', expand=True, pady=(0, 70))  # 底部留出70px给按钮
+        content_frame.pack(fill='both', expand=True, pady=(0, 10))  # 底部留出70px给按钮
 
         # 创建Canvas和滚动条
         canvas = tk.Canvas(content_frame, bg=get_color('background'), highlightthickness=0)
@@ -129,6 +130,19 @@ class AddTaskDialog:
 
         # 创建表单内容
         self.create_form_content(scroll_frame)
+
+    def show_template_help(self):
+        """显示模板帮助信息"""
+        selected_index = self.template_combo.current()
+        if selected_index >= 0 and selected_index < len(self.message_templates):
+            template = self.message_templates[selected_index]
+            desc = template.get('templates_description', '无描述')
+            messagebox.showinfo(
+                f"模板说明 - {template['templates_name']}",
+                f"{desc}\n\n模板ID: {template['templates_id']}"
+            )
+        else:
+            messagebox.showinfo("模板说明", "请先选择一个发送模板")
 
     def create_form_content(self, parent):
         """创建表单内容"""
@@ -186,20 +200,29 @@ class AddTaskDialog:
         self.task_name_entry.pack(side='right', fill='x', expand=True, padx=(10, 0))
         self.task_name_entry.bind('<KeyRelease>', self.limit_task_name)
 
-        # 3. 目标号码 - 标题和提示放在一行
+        # 3. 目标号码 - 标题和提示合并在一行
         target_header_row = tk.Frame(form_frame, bg=get_color('background'))
         target_header_row.pack(fill='x', pady=(0, 5))
 
-        self.create_field(target_header_row, "目标号码:", required=True)
+        # 红色的必填标记和标签
+        target_label = tk.Label(
+            target_header_row,
+            text="* 目标号码:",
+            font=get_font('default'),
+            fg=get_color('danger'),
+            bg=get_color('background')
+        )
+        target_label.pack(side='left')
 
+        # 灰色的提示文字
         tip_label = tk.Label(
             target_header_row,
-            text="提示：多个号码请换行输入，每行一个号码",
-            font=('Microsoft YaHei', 8),
+            text="(多个号码请换行输入，每行一个号码)",
+            font=get_font('default'),  # 使用相同字体大小
             fg=get_color('text_light'),
             bg=get_color('background')
         )
-        tip_label.pack(side='right')
+        tip_label.pack(side='left', padx=(5, 0))
 
         # 目标号码输入区域 - 增加高度
         target_container = tk.Frame(form_frame, bg=get_color('background'))
@@ -268,21 +291,39 @@ class AddTaskDialog:
         template_row = tk.Frame(form_frame, bg=get_color('background'))
         template_row.pack(fill='x', pady=(0, 15))
 
-        # 左侧：短信模板
+        # 左侧：发送模板（改名称）
         template_left = tk.Frame(template_row, bg=get_color('background'))
         template_left.pack(side='left', fill='both', expand=True, padx=(0, 10))
 
-        self.create_field(template_left, "短信模板:", required=True)
+        self.create_field(template_left, "发送模板:", required=True)  # 改标签名称
+        template_info_frame = tk.Frame(template_left, bg=get_color('background'))
+        template_info_frame.pack(fill='x')
+
         self.template_var = tk.StringVar()
         self.template_combo = ttk.Combobox(
-            template_left,
+            template_info_frame,
             textvariable=self.template_var,
             values=[],
             state='readonly',
             font=get_font('default')
         )
-        self.template_combo.pack(fill='x')
+        self.template_combo.pack(side='left', fill='x', expand=True)
         self.template_combo.bind('<<ComboboxSelected>>', self.on_template_select)
+
+        # 添加模板说明按钮（可选）
+        template_help_btn = tk.Button(
+            template_info_frame,
+            text="?",
+            font=get_font('small'),
+            bg='#E0E0E0',
+            fg='#666666',
+            relief='flat',
+            cursor='hand2',
+            command=self.show_template_help,
+            width=2,
+            height=1
+        )
+        template_help_btn.pack(side='left', padx=(5, 0))
 
         # 右侧：号码模式
         mode_right = tk.Frame(template_row, bg=get_color('background'))
@@ -300,8 +341,12 @@ class AddTaskDialog:
         mode_combo.pack(fill='x')
         mode_combo.set("国内号码")
 
-        # 6. 主题（彩信专用，初始隐藏）- 左右布局
-        self.subject_container = tk.Frame(form_frame, bg=get_color('background'))
+        # 6. 主题（彩信专用）- 创建一个占位框架
+        self.subject_placeholder = tk.Frame(form_frame, bg=get_color('background'))
+        self.subject_placeholder.pack(fill='x', pady=0)  # 先占位，但高度为0
+
+        # 创建主题容器（作为占位框架的子元素）
+        self.subject_container = tk.Frame(self.subject_placeholder, bg=get_color('background'))
 
         # 左侧标签
         subject_label_frame = tk.Frame(self.subject_container, bg=get_color('background'), width=100)
@@ -412,29 +457,40 @@ class AddTaskDialog:
         )
         submit_btn.pack(side='right')
 
-    def load_message_templates(self):
-        """加载消息模板"""
+    def load_message_templates(self, template_type='sms'):
+        """加载消息模板（根据类型筛选）"""
         try:
+            # 根据当前选择的短信模式加载对应的模板
             query = """
-            SELECT templates_id, templates_name, templates_content 
+            SELECT templates_id, templates_name, templates_description
             FROM message_templates 
+            WHERE templates_type = %s 
+            AND (templates_status = 'active' OR templates_status IS NULL)
             ORDER BY templates_name
             """
-            templates = execute_query(query, dict_cursor=True)
+            templates = execute_query(query, (template_type,), dict_cursor=True)
 
             if templates:
                 self.message_templates = templates
-                template_values = [f"{t['templates_name']}" for t in templates]
+                # 显示模板名称和描述
+                template_values = []
+                for t in templates:
+                    template_values.append(t['templates_name'])
+
                 self.template_combo['values'] = template_values
                 if template_values:
                     self.template_combo.set(template_values[0])
-                    self.on_template_select()
+            else:
+                # 如果没有模板，显示提示
+                self.message_templates = []
+                self.template_combo['values'] = ['暂无可用模板']
+                self.template_combo.set('暂无可用模板')
 
         except Exception as e:
             print(f"加载消息模板失败: {e}")
-            self.message_templates = [
-                {'templates_id': 1, 'templates_name': '默认模板', 'templates_content': '请输入短信内容'}
-            ]
+            self.message_templates = []
+            self.template_combo['values'] = ['加载失败']
+            self.template_combo.set('加载失败')
 
     def create_field(self, parent, text, required=False):
         """创建字段标签"""
@@ -460,27 +516,33 @@ class AddTaskDialog:
     def on_mode_change(self):
         """短信模式改变事件"""
         self.update_mode_fields()
+        # 重新加载对应类型的模板
+        mode = self.sms_mode_var.get()
+        self.load_message_templates(template_type=mode)
+
 
     def update_mode_fields(self):
         """更新模式相关字段状态"""
         is_mms = self.sms_mode_var.get() == "mms"
 
         if is_mms:
+            # 在占位框架中显示主题容器
             self.subject_container.pack(fill='x', pady=(0, 15))
+            self.subject_placeholder.pack_configure(pady=(0, 15))  # 调整占位框架的间距
         else:
+            # 隐藏主题容器
             self.subject_container.pack_forget()
+            self.subject_placeholder.pack_configure(pady=0)  # 占位框架高度设为0
             self.subject_entry.delete(0, 'end')
 
     def on_template_select(self, event=None):
         """模板选择改变事件"""
         try:
-            selected_template = self.template_var.get()
-            if selected_template and self.message_templates:
-                for template in self.message_templates:
-                    if template['templates_name'] == selected_template:
-                        self.content_text.delete('1.0', 'end')
-                        self.content_text.insert('1.0', template['templates_content'])
-                        break
+            selected_index = self.template_combo.current()
+            if selected_index >= 0 and selected_index < len(self.message_templates):
+                selected_template = self.message_templates[selected_index]
+                print(f"选中模板: ID={selected_template['templates_id']}, 名称={selected_template['templates_name']}")
+                # 不再自动填充内容，模板只是PDU配置
         except Exception as e:
             print(f"模板选择处理失败: {e}")
 
@@ -496,11 +558,12 @@ class AddTaskDialog:
 
     def get_selected_template_id(self):
         """获取选中的模板ID"""
-        selected_template = self.template_var.get()
-        if selected_template and self.message_templates:
-            for template in self.message_templates:
-                if template['templates_name'] == selected_template:
-                    return template['templates_id']
+        try:
+            selected_index = self.template_combo.current()
+            if selected_index >= 0 and selected_index < len(self.message_templates):
+                return self.message_templates[selected_index]['templates_id']
+        except:
+            pass
         return None
 
     def validate_form(self):
@@ -515,8 +578,9 @@ class AddTaskDialog:
             self.target_text.focus()
             return False
 
-        if not self.template_var.get():
-            messagebox.showerror("错误", "请选择短信模板")
+        # 验证模板选择
+        if not self.get_selected_template_id():
+            messagebox.showerror("错误", "请选择发送模板")
             self.template_combo.focus()
             return False
 
