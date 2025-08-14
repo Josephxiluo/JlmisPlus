@@ -6,6 +6,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sys
 import os
+import pandas as pd
+import csv
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -217,18 +219,50 @@ class AddTaskDialog:
         self.target_text.configure(yscrollcommand=target_scroll.set)
         target_scroll.pack(side='right', fill='y')
 
-        # 4. 上传文件按钮（暂时禁用）
+        # 4. 文件操作按钮区域
+        file_button_frame = tk.Frame(form_frame, bg=get_color('background'))
+        file_button_frame.pack(fill='x', pady=(0, 15))
+
+        # 上传文件按钮
         upload_btn = tk.Button(
-            form_frame,
-            text="上传文件 (开发中)",
+            file_button_frame,
+            text="📁 导入号码文件",
             font=get_font('button'),
-            bg='#CCCCCC',
-            fg='#666666',
+            bg=get_color('primary'),
+            fg='#5D4037',
             relief='flat',
-            state='disabled',
-            width=15
+            cursor='hand2',
+            command=self.upload_file,
+            width=15,
+            height=1
         )
-        upload_btn.pack(anchor='w', pady=(0, 15))
+        upload_btn.pack(side='left', padx=(0, 10))
+
+        # 清空号码按钮
+        clear_btn = tk.Button(
+            file_button_frame,
+            text="🗑 清空号码",
+            font=get_font('button'),
+            bg='#F5F5F5',
+            fg='#333333',
+            relief='solid',
+            bd=1,
+            cursor='hand2',
+            command=self.clear_phone_numbers,
+            width=12,
+            height=1
+        )
+        clear_btn.pack(side='left')
+
+        # 号码计数标签
+        self.phone_count_label = tk.Label(
+            file_button_frame,
+            text="共 0 个号码",
+            font=get_font('small'),
+            fg=get_color('text_light'),
+            bg=get_color('background')
+        )
+        self.phone_count_label.pack(side='right', padx=(20, 0))
 
         # 5. 模板和号码模式一行显示
         template_row = tk.Frame(form_frame, bg=get_color('background'))
@@ -314,6 +348,9 @@ class AddTaskDialog:
 
         # 初始状态
         self.update_mode_fields()
+
+        # 绑定文本变化事件以更新计数
+        self.target_text.bind('<KeyRelease>', self.on_target_text_change)
 
     def create_fixed_buttons(self, parent):
         """创建固定按钮区域"""
@@ -446,6 +483,16 @@ class AddTaskDialog:
                         break
         except Exception as e:
             print(f"模板选择处理失败: {e}")
+
+    def on_target_text_change(self, event=None):
+        """目标文本框内容变化时更新计数"""
+        content = self.target_text.get('1.0', 'end').strip()
+        if content:
+            lines = [line.strip() for line in content.split('\n') if line.strip()]
+            valid_count = sum(1 for line in lines if self.is_phone_number(line))
+            self.update_phone_count_display(valid_count)
+        else:
+            self.update_phone_count_display(0)
 
     def get_selected_template_id(self):
         """获取选中的模板ID"""
@@ -690,6 +737,382 @@ class AddTaskDialog:
         self.dialog.wait_window()
         return self.result
 
+    def upload_file(self):
+        """上传文件并导入号码 - 修复 macOS 兼容性问题"""
+        try:
+            import platform
+
+            # 检测操作系统
+            is_macos = platform.system() == 'Darwin'
+
+            if is_macos:
+                # macOS 版本 - 每个扩展名单独列出
+                file_path = filedialog.askopenfilename(
+                    title="选择号码文件",
+                    filetypes=[
+                        ("Excel文件", "*.xlsx"),
+                        ("Excel文件", "*.xls"),
+                        ("CSV文件", "*.csv"),
+                        ("文本文件", "*.txt"),
+                        ("所有文件", "*.*")
+                    ]
+                )
+            else:
+                # Windows/Linux 版本 - 可以使用分号分隔
+                file_path = filedialog.askopenfilename(
+                    title="选择号码文件",
+                    filetypes=[
+                        ("Excel文件", "*.xlsx;*.xls"),
+                        ("CSV文件", "*.csv"),
+                        ("文本文件", "*.txt"),
+                        ("所有文件", "*.*")
+                    ]
+                )
+
+            if not file_path:
+                return
+
+            # 根据文件类型读取号码
+            file_ext = os.path.splitext(file_path)[1].lower()
+            phone_numbers = []
+
+            if file_ext in ['.xlsx', '.xls']:
+                phone_numbers = self.read_excel_file(file_path)
+            elif file_ext == '.csv':
+                phone_numbers = self.read_csv_file(file_path)
+            elif file_ext == '.txt':
+                phone_numbers = self.read_txt_file(file_path)
+            else:
+                messagebox.showerror("错误", "不支持的文件格式")
+                return
+
+            if phone_numbers:
+                # 将号码添加到文本框
+                self.append_phone_numbers(phone_numbers)
+                messagebox.showinfo("成功", f"成功导入 {len(phone_numbers)} 个号码")
+            else:
+                messagebox.showwarning("警告", "文件中没有找到有效的号码")
+
+        except Exception as e:
+            messagebox.showerror("错误", f"读取文件失败：{str(e)}")
+
+    # 备选方案：更简洁的跨平台版本
+    def upload_file_v2(self):
+        """上传文件并导入号码 - 跨平台简化版"""
+        try:
+            # 使用更通用的文件类型定义
+            file_path = filedialog.askopenfilename(
+                title="选择号码文件",
+                filetypes=[
+                    ("支持的文件", "*.xlsx *.xls *.csv *.txt"),  # 使用空格分隔
+                    ("Excel文件", "*.xlsx"),
+                    ("Excel 97-2003", "*.xls"),
+                    ("CSV文件", "*.csv"),
+                    ("文本文件", "*.txt"),
+                    ("所有文件", "*.*")
+                ]
+            )
+
+            if not file_path:
+                return
+
+            # 根据文件类型读取号码
+            file_ext = os.path.splitext(file_path)[1].lower()
+            phone_numbers = []
+
+            if file_ext in ['.xlsx', '.xls']:
+                phone_numbers = self.read_excel_file(file_path)
+            elif file_ext == '.csv':
+                phone_numbers = self.read_csv_file(file_path)
+            elif file_ext == '.txt':
+                phone_numbers = self.read_txt_file(file_path)
+            else:
+                messagebox.showerror("错误", "不支持的文件格式")
+                return
+
+            if phone_numbers:
+                # 将号码添加到文本框
+                self.append_phone_numbers(phone_numbers)
+                messagebox.showinfo("成功", f"成功导入 {len(phone_numbers)} 个号码")
+            else:
+                messagebox.showwarning("警告", "文件中没有找到有效的号码")
+
+        except Exception as e:
+            messagebox.showerror("错误", f"读取文件失败：{str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    # 方案3：最简单的版本（推荐）
+    def upload_file_simple(self):
+        """上传文件并导入号码 - 最简化版本"""
+        try:
+            # 不使用复杂的文件类型过滤
+            file_path = filedialog.askopenfilename(
+                title="选择号码文件（支持 Excel、CSV、文本文件）"
+            )
+
+            if not file_path:
+                return
+
+            # 检查文件扩展名
+            file_ext = os.path.splitext(file_path)[1].lower()
+
+            # 支持的文件格式
+            supported_formats = {
+                '.xlsx': self.read_excel_file,
+                '.xls': self.read_excel_file,
+                '.csv': self.read_csv_file,
+                '.txt': self.read_txt_file
+            }
+
+            if file_ext not in supported_formats:
+                messagebox.showerror(
+                    "不支持的文件格式",
+                    f"请选择以下格式的文件：\n• Excel (.xlsx, .xls)\n• CSV (.csv)\n• 文本文件 (.txt)"
+                )
+                return
+
+            # 读取文件
+            read_function = supported_formats[file_ext]
+            phone_numbers = read_function(file_path)
+
+            if phone_numbers:
+                # 将号码添加到文本框
+                self.append_phone_numbers(phone_numbers)
+                messagebox.showinfo("成功", f"成功导入 {len(phone_numbers)} 个号码")
+            else:
+                messagebox.showwarning("警告", "文件中没有找到有效的号码")
+
+        except Exception as e:
+            messagebox.showerror("错误", f"读取文件失败：{str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def read_excel_file(self, file_path):
+        """读取Excel文件中的号码"""
+        phone_numbers = []
+        try:
+            # 读取Excel文件
+            df = pd.read_excel(file_path, dtype=str)
+
+            # 查找包含电话号码的列
+            phone_columns = []
+            for col in df.columns:
+                col_lower = str(col).lower()
+                if any(keyword in col_lower for keyword in ['phone', '电话', '号码', '手机', 'mobile', 'tel']):
+                    phone_columns.append(col)
+
+            # 如果没有找到明确的电话列，使用第一列
+            if not phone_columns and len(df.columns) > 0:
+                phone_columns = [df.columns[0]]
+
+            # 提取号码
+            for col in phone_columns:
+                for value in df[col].dropna():
+                    phone = self.clean_phone_number(str(value))
+                    if phone:
+                        phone_numbers.append(phone)
+
+            # 去重
+            phone_numbers = list(dict.fromkeys(phone_numbers))
+
+        except Exception as e:
+            print(f"读取Excel文件失败: {e}")
+            raise
+
+        return phone_numbers
+
+    def read_csv_file(self, file_path):
+        """读取CSV文件中的号码"""
+        phone_numbers = []
+        try:
+            # 尝试不同的编码
+            encodings = ['utf-8', 'gbk', 'gb2312', 'utf-8-sig']
+
+            for encoding in encodings:
+                try:
+                    with open(file_path, 'r', encoding=encoding) as file:
+                        csv_reader = csv.reader(file)
+
+                        # 读取所有行
+                        rows = list(csv_reader)
+                        if not rows:
+                            continue
+
+                        # 查找电话号码列
+                        header = rows[0] if rows else []
+                        phone_col_index = -1
+
+                        # 查找包含电话关键词的列
+                        for i, col in enumerate(header):
+                            col_lower = str(col).lower()
+                            if any(keyword in col_lower for keyword in
+                                   ['phone', '电话', '号码', '手机', 'mobile', 'tel']):
+                                phone_col_index = i
+                                break
+
+                        # 如果没有找到，假设第一列是电话号码
+                        if phone_col_index == -1:
+                            phone_col_index = 0
+
+                        # 提取号码（跳过标题行）
+                        start_row = 1 if len(header) > 0 and not self.is_phone_number(header[phone_col_index]) else 0
+
+                        for row in rows[start_row:]:
+                            if phone_col_index < len(row):
+                                phone = self.clean_phone_number(row[phone_col_index])
+                                if phone:
+                                    phone_numbers.append(phone)
+
+                        # 如果成功读取，跳出编码循环
+                        if phone_numbers:
+                            break
+
+                except UnicodeDecodeError:
+                    continue
+
+            # 去重
+            phone_numbers = list(dict.fromkeys(phone_numbers))
+
+        except Exception as e:
+            print(f"读取CSV文件失败: {e}")
+            raise
+
+        return phone_numbers
+
+    def read_txt_file(self, file_path):
+        """读取文本文件中的号码"""
+        phone_numbers = []
+        try:
+            # 尝试不同的编码
+            encodings = ['utf-8', 'gbk', 'gb2312', 'utf-8-sig']
+
+            for encoding in encodings:
+                try:
+                    with open(file_path, 'r', encoding=encoding) as file:
+                        for line in file:
+                            # 支持多种分隔符
+                            separators = [',', ';', '\t', '|', ' ']
+
+                            # 尝试分割行
+                            parts = [line.strip()]
+                            for sep in separators:
+                                if sep in line:
+                                    parts = line.split(sep)
+                                    break
+
+                            # 提取每个部分的号码
+                            for part in parts:
+                                phone = self.clean_phone_number(part)
+                                if phone:
+                                    phone_numbers.append(phone)
+
+                        # 如果成功读取，跳出编码循环
+                        if phone_numbers:
+                            break
+
+                except UnicodeDecodeError:
+                    continue
+
+            # 去重
+            phone_numbers = list(dict.fromkeys(phone_numbers))
+
+        except Exception as e:
+            print(f"读取文本文件失败: {e}")
+            raise
+
+        return phone_numbers
+
+    def clean_phone_number(self, phone_str):
+        """清理和验证电话号码"""
+        if not phone_str:
+            return None
+
+        # 转换为字符串并去除空白
+        phone = str(phone_str).strip()
+
+        # 移除常见的非数字字符（保留+号用于国际号码）
+        phone = phone.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
+        phone = phone.replace('.', '').replace('/', '').replace('\\', '')
+
+        # 如果是浮点数格式（Excel可能会这样），转换为整数字符串
+        if '.' in phone and phone.replace('.', '').replace('+', '').isdigit():
+            phone = phone.split('.')[0]
+
+        # 验证号码格式
+        if self.is_phone_number(phone):
+            return phone
+
+        return None
+
+    def is_phone_number(self, phone):
+        """验证是否为有效的电话号码"""
+        if not phone:
+            return False
+
+        # 去除+号后应该都是数字
+        phone_digits = phone.replace('+', '')
+        if not phone_digits.isdigit():
+            return False
+
+        # 国内手机号：11位数字
+        if len(phone_digits) == 11 and phone_digits[0] == '1':
+            return True
+
+        # 国际号码：以+开头，总长度8-15位
+        if phone.startswith('+') and 8 <= len(phone_digits) <= 15:
+            return True
+
+        # 其他10-15位的号码也接受
+        if 10 <= len(phone_digits) <= 15:
+            return True
+
+        return False
+
+    def append_phone_numbers(self, phone_numbers):
+        """将号码添加到文本框"""
+        # 获取现有内容
+        current_content = self.target_text.get('1.0', 'end').strip()
+
+        # 解析现有号码
+        existing_numbers = set()
+        if current_content:
+            for line in current_content.split('\n'):
+                line = line.strip()
+                if line:
+                    existing_numbers.add(line)
+
+        # 添加新号码（去重）
+        new_numbers = []
+        for phone in phone_numbers:
+            if phone not in existing_numbers:
+                new_numbers.append(phone)
+                existing_numbers.add(phone)
+
+        if new_numbers:
+            # 如果文本框有内容，先添加换行
+            if current_content:
+                self.target_text.insert('end', '\n')
+
+            # 添加新号码
+            self.target_text.insert('end', '\n'.join(new_numbers))
+
+        # 更新统计信息（可选）
+        total_count = len(existing_numbers)
+        self.update_phone_count_display(total_count)
+
+    def update_phone_count_display(self, count):
+        """更新号码数量显示（可选功能）"""
+        # 如果有号码计数标签，更新它
+        if hasattr(self, 'phone_count_label'):
+            self.phone_count_label.config(text=f"共 {count} 个号码")
+
+    def clear_phone_numbers(self):
+        """清空号码列表"""
+        if messagebox.askyesno("确认", "确定要清空所有号码吗？"):
+            self.target_text.delete('1.0', 'end')
+            if hasattr(self, 'phone_count_label'):
+                self.phone_count_label.config(text="共 0 个号码")
 
 def main():
     """测试添加任务对话框"""
