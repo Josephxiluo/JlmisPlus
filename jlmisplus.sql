@@ -356,24 +356,33 @@ COMMENT ON COLUMN device_authorizations.register_time IS '注册时间';
 COMMENT ON COLUMN device_authorizations.last_active_time IS '最后活跃时间';
 
 -- 8.2 消息模板表
-CREATE TABLE message_templates (
-    templates_id SERIAL PRIMARY KEY,
-    templates_name VARCHAR(200) NOT NULL,
-    templates_type VARCHAR(20) DEFAULT 'sms',
-    templates_content TEXT,
-    templates_variables JSON,
-    templates_config JSON,
-    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE "public"."message_templates" (
+  "templates_id" int4 NOT NULL DEFAULT nextval('message_templates_templates_id_seq'::regclass),
+  "templates_name" varchar(200) COLLATE "pg_catalog"."default" NOT NULL,
+  "templates_type" varchar(20) COLLATE "pg_catalog"."default" DEFAULT 'sms'::character varying,
+  "templates_config" json,
+  "created_time" timestamp(6) DEFAULT CURRENT_TIMESTAMP,
+  "updated_time" timestamp(6) DEFAULT CURRENT_TIMESTAMP,
+  "templates_status" varchar(20) COLLATE "pg_catalog"."default" DEFAULT 'active'::character varying,
+  "templates_description" text COLLATE "pg_catalog"."default",
+  CONSTRAINT "message_templates_pkey" PRIMARY KEY ("templates_id")
 );
 
--- 添加注释
-COMMENT ON TABLE message_templates IS '消息模板表';
-COMMENT ON COLUMN message_templates.templates_name IS '模板名称';
-COMMENT ON COLUMN message_templates.templates_type IS '模板类型：sms、mms';
-COMMENT ON COLUMN message_templates.templates_content IS '模板内容';
-COMMENT ON COLUMN message_templates.templates_variables IS '模板变量';
-COMMENT ON COLUMN message_templates.templates_config IS '模板配置';
+CREATE TRIGGER "trigger_message_templates_updated_time" BEFORE UPDATE ON "public"."message_templates"
+FOR EACH ROW
+EXECUTE PROCEDURE "public"."update_updated_time_column"();
+
+COMMENT ON COLUMN "public"."message_templates"."templates_name" IS '模板名称';
+
+COMMENT ON COLUMN "public"."message_templates"."templates_type" IS '模板类型：sms（短信）、mms（彩信）';
+
+COMMENT ON COLUMN "public"."message_templates"."templates_config" IS 'PDU配置规则（JSON格式）';
+
+COMMENT ON COLUMN "public"."message_templates"."templates_status" IS '模板状态：active（启用）、inactive（禁用）';
+
+COMMENT ON COLUMN "public"."message_templates"."templates_description" IS '模板描述说明';
+
+COMMENT ON TABLE "public"."message_templates" IS '消息发送模板配置表';
 
 -- 8.3 数据字典表
 CREATE TABLE data_dictionaries (
