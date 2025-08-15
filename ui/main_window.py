@@ -262,7 +262,7 @@ class MainWindow:
                     if self.task_list_widget:
                         print("[DEBUG] 开始刷新任务列表...")
                         # 调用 reload_tasks 返回第一页并显示新任务
-                        self.task_list_widget.reload_tasks()
+                        self.task_list_widget.refresh_tasks()
                     else:
                         print("[ERROR] task_list_widget 不存在")
 
