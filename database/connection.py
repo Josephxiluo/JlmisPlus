@@ -431,6 +431,29 @@ def init_database():
         log_error(f"数据库初始化失败", e)
         return False
 
+
+def close_database():
+    """关闭数据库连接（兼容性函数）"""
+    global _connection_pool
+    try:
+        with _pool_lock:
+            # 关闭连接池中的所有连接
+            for conn in _connection_pool:
+                try:
+                    if conn and not conn.closed:
+                        conn.close()
+                except Exception as e:
+                    log_error(f"关闭连接失败", e)
+
+            # 清空连接池
+            _connection_pool.clear()
+
+        log_info("数据库连接池已关闭")
+        return True
+    except Exception as e:
+        log_error(f"关闭数据库失败", e)
+        return False
+
 # 如果直接运行此模块，测试连接
 if __name__ == "__main__":
     print("数据库连接模块测试")

@@ -220,6 +220,8 @@ class MainWindow:
     def on_task_update(self, action, task):
         """任务更新回调 - 处理各种任务操作"""
         try:
+            print(f"[DEBUG] on_task_update: action={action}, task={task}")
+
             if action == 'add':
                 self.show_add_task_dialog()
             elif action == 'test':
@@ -233,6 +235,9 @@ class MainWindow:
             elif action == 'export_report':
                 self.show_export_dialog(None, 'report')
         except Exception as e:
+            print(f"[ERROR] 操作失败: {e}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("错误", f"操作失败：{str(e)}")
 
     def on_port_select(self, ports):
@@ -243,16 +248,35 @@ class MainWindow:
     def show_add_task_dialog(self):
         """显示添加任务对话框"""
         try:
+            print("[DEBUG] 打开添加任务对话框...")
             dialog = AddTaskDialog(self.root, self.normalized_user_info)
             result = dialog.show()
+
             if result:
-                self.show_success_message("任务创建成功！")
-                # 刷新任务列表
-                if self.task_list_widget:
-                    self.task_list_widget.refresh_tasks()
-                # 更新余额
-                self.refresh_balance()
+                print(f"[DEBUG] 对话框返回结果: {result}")
+
+                if result.get('success') or result.get('task_id'):
+                    self.show_success_message("任务创建成功！")
+
+                    # 刷新任务列表
+                    if self.task_list_widget:
+                        print("[DEBUG] 开始刷新任务列表...")
+                        # 调用 reload_tasks 返回第一页并显示新任务
+                        self.task_list_widget.reload_tasks()
+                    else:
+                        print("[ERROR] task_list_widget 不存在")
+
+                    # 更新余额（可选）
+                    self.refresh_balance()
+                else:
+                    print(f"[WARNING] 任务创建未成功: {result}")
+            else:
+                print("[DEBUG] 用户取消了添加任务")
+
         except Exception as e:
+            print(f"[ERROR] 打开添加任务对话框失败: {e}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("错误", f"打开添加任务对话框失败：{str(e)}")
 
     def show_task_test_dialog(self, task):
