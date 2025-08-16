@@ -474,6 +474,12 @@ class EnhancedPortService:
     def _format_port_info(self, port) -> Dict[str, Any]:
         """格式化端口信息（统一接口）"""
         try:
+            # 对于模拟端口，直接从端口对象获取最新数据
+            if hasattr(port, 'send_count'):
+                send_count = port.send_count  # 直接获取当前值
+            else:
+                send_count = 0
+
             # 尝试不同的方法获取端口信息
             if hasattr(port, 'get_status_info'):
                 # 模拟端口

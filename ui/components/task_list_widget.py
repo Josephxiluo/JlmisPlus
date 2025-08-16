@@ -191,7 +191,7 @@ class TaskListWidget:
 
     def load_tasks(self):
         """加载任务列表"""
-        print(f"[DEBUG] 开始加载任务列表 - 页码: {self.current_page}")
+        #print(f"[DEBUG] 开始加载任务列表 - 页码: {self.current_page}")
         try:
             # 清空现有项目
             for widget in self.scrollable_frame.winfo_children():
@@ -210,7 +210,7 @@ class TaskListWidget:
 
             if result['success']:
                 self.tasks = result['tasks']
-                print(f"成功加载 {len(self.tasks)} 个任务")
+                #print(f"成功加载 {len(self.tasks)} 个任务")
 
                 # 创建任务列表项
                 for i, task in enumerate(self.tasks):
@@ -897,7 +897,7 @@ class TaskListWidget:
 
             # 如果有活动任务或者任务列表为空，都刷新列表
             if has_active_tasks or len(self.tasks) == 0:
-                print("[DEBUG] 自动刷新任务列表...")
+                #print("[DEBUG] 自动刷新任务列表...")
 
                 # 保存当前选中的任务
                 selected_task_id = self.selected_task.get('id') if self.selected_task else None

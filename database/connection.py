@@ -88,7 +88,7 @@ def get_connection():
         # 移除options中的空值
         conn_params = {k: v for k, v in DB_CONFIG.items() if v is not None}
 
-        log_info(f"连接数据库: {conn_params.get('host')}:{conn_params.get('port')}/{conn_params.get('database')}")
+        #log_info(f"连接数据库: {conn_params.get('host')}:{conn_params.get('port')}/{conn_params.get('database')}")
         conn = psycopg2.connect(**conn_params)
         return conn
     except Exception as e:
@@ -115,10 +115,10 @@ def execute_query(query: str, params: Union[tuple, dict] = None,
 
             if fetch_one:
                 result = cursor.fetchone()
-                log_info(f"查询返回单条记录")
+                #log_info(f"查询返回单条记录")
             else:
                 result = cursor.fetchall()
-                log_info(f"查询返回 {len(result)} 条记录")
+                #log_info(f"查询返回 {len(result)} 条记录")
 
             return result
 

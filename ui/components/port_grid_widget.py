@@ -71,6 +71,24 @@ class PortGridWidget:
         self.create_widgets()
         self.load_ports()
 
+        # 添加自动刷新
+        self.auto_refresh_timer = None
+        self.start_auto_refresh()
+
+    def start_auto_refresh(self):
+        """启动自动刷新"""
+
+        def refresh():
+            self.refresh_ports()
+            # 每2秒刷新一次
+            self.auto_refresh_timer = self.parent.after(2000, refresh)
+
+        refresh()
+
+    def refresh_ports(self):
+        """刷新端口数据"""
+        self.load_ports()
+
     def create_widgets(self):
         """创建现代化端口网格组件"""
         # 创建卡片容器

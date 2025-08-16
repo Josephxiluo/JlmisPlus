@@ -33,6 +33,9 @@ class TaskExecutor:
         self._lock = threading.Lock()
         self.worker_thread = None
 
+        # 添加消息队列
+        self.message_queue = queue.Queue()  # 添加这行
+
         # 积分服务（稍后注入）
         self.credit_service = None
 
@@ -427,33 +430,48 @@ class TaskExecutor:
     def _on_message_success(self, msg_id: int):
         """消息发送成功处理"""
         try:
+            # 先检查消息之前的状态，避免重复计数
+            check_query = """
+                SELECT details_status 
+                FROM task_message_details 
+                WHERE details_id = %s
+            """
+            result = execute_query(check_query, (msg_id,), fetch_one=True)
+
+            if result and result[0] == 'success':
+                logger.debug(f"消息 {msg_id} 已经是成功状态，跳过处理")
+                # 已经是成功状态，不重复计数
+                return
+
             # 更新消息状态
             update_msg = """
                 UPDATE task_message_details
                 SET details_status = 'success', send_time = %s, updated_time = %s
-                WHERE details_id = %s
+                WHERE details_id = %s AND details_status != 'success'
             """
-            execute_update(update_msg, (datetime.now(), datetime.now(), msg_id))
+            affected = execute_update(update_msg, (datetime.now(), datetime.now(), msg_id))
 
-            # 更新任务统计
-            update_task = """
-                UPDATE tasks
-                SET tasks_success_count = tasks_success_count + 1,
-                    tasks_pending_count = GREATEST(0, tasks_pending_count - 1),
-                    updated_time = %s
-                WHERE tasks_id = %s
-            """
-            execute_update(update_task, (datetime.now(), self.current_task['id']))
+            if affected and affected > 0:
+                # 只有真正更新了状态才更新统计
+                update_task = """
+                    UPDATE tasks
+                    SET tasks_success_count = tasks_success_count + 1,
+                        tasks_pending_count = GREATEST(0, tasks_pending_count - 1),
+                        updated_time = %s
+                    WHERE tasks_id = %s
+                """
+                execute_update(update_task, (datetime.now(), self.current_task['id']))
 
-            # 实际扣除积分
-            if self.credit_service:
-                self.credit_service.actual_deduct(
-                    self.current_task['operators_id'],
-                    1,
-                    self.current_task['id'],
-                    msg_id,
-                    self.current_task.get('mode', 'sms')
-                )
+                # 实际扣除积分
+                if self.credit_service:
+                    self.credit_service.actual_deduct(
+                        self.current_task['operators_id'],
+                        1,
+                        self.current_task['id'],
+                        msg_id,
+                        self.current_task.get('mode', 'sms')
+                    )
+                logger.info(f"消息 {msg_id} 发送成功，更新统计")
 
             # 触发进度回调
             if self.progress_callback:
@@ -463,56 +481,60 @@ class TaskExecutor:
             logger.error(f"处理成功消息失败: {e}")
 
     def _on_message_failed(self, msg_id: int):
-        """消息发送失败处理 - 修正版，使用retry_count字段"""
+        """消息发送失败处理 - 修复版"""
         try:
-            # 获取消息的重试次数
-            query = "SELECT COALESCE(retry_count, 0) as retry_count FROM task_message_details WHERE details_id = %s"
-            result = execute_query(query, (msg_id,), fetch_one=True)
+            # 先检查消息当前状态
+            check_query = """
+                SELECT details_status, COALESCE(retry_count, 0) as retry_count
+                FROM task_message_details 
+                WHERE details_id = %s
+            """
+            result = execute_query(check_query, (msg_id,), fetch_one=True, dict_cursor=True)
 
-            retry_count = result[0] if result else 0
-            max_retry = 3  # 最大重试次数
+            if not result:
+                return
+
+            # 如果已经是失败状态，不重复处理
+            if result['details_status'] == 'failed':
+                logger.debug(f"消息 {msg_id} 已经是失败状态，跳过处理")
+                return
+
+            retry_count = result['retry_count']
+            max_retry = 3
 
             if retry_count < max_retry:
-                # 增加重试次数，标记为待重试
-                update_retry = """
-                    UPDATE task_message_details
-                    SET details_status = 'pending', 
-                        retry_count = COALESCE(retry_count, 0) + 1,
-                        updated_time = %s
-                    WHERE details_id = %s
-                """
-                execute_update(update_retry, (datetime.now(), msg_id))
-
-                logger.info(f"消息 {msg_id} 标记为重试，当前重试次数: {retry_count + 1}")
+                # 增加重试次数，但不在这里标记为pending（因为已经在_send_message中处理了）
+                logger.info(f"消息 {msg_id} 失败但可以重试，当前重试次数: {retry_count}")
             else:
                 # 超过最大重试次数，标记为最终失败
                 update_failed = """
                     UPDATE task_message_details
                     SET details_status = 'failed', updated_time = %s
-                    WHERE details_id = %s
+                    WHERE details_id = %s AND details_status != 'failed'
                 """
-                execute_update(update_failed, (datetime.now(), msg_id))
+                affected = execute_update(update_failed, (datetime.now(), msg_id))
 
-                # 更新任务失败计数
-                update_task = """
-                    UPDATE tasks
-                    SET tasks_failed_count = tasks_failed_count + 1,
-                        tasks_pending_count = GREATEST(0, tasks_pending_count - 1),
-                        updated_time = %s
-                    WHERE tasks_id = %s
-                """
-                execute_update(update_task, (datetime.now(), self.current_task['id']))
+                if affected and affected > 0:
+                    # 更新任务失败计数
+                    update_task = """
+                        UPDATE tasks
+                        SET tasks_failed_count = tasks_failed_count + 1,
+                            tasks_pending_count = GREATEST(0, tasks_pending_count - 1),
+                            updated_time = %s
+                        WHERE tasks_id = %s
+                    """
+                    execute_update(update_task, (datetime.now(), self.current_task['id']))
 
-                # 回退积分
-                if self.credit_service:
-                    self.credit_service.rollback(
-                        self.current_task['operators_id'],
-                        1,
-                        self.current_task['id'],
-                        self.current_task.get('mode', 'sms')
-                    )
+                    # 回退积分
+                    if self.credit_service:
+                        self.credit_service.rollback(
+                            self.current_task['operators_id'],
+                            1,
+                            self.current_task['id'],
+                            self.current_task.get('mode', 'sms')
+                        )
 
-                logger.info(f"消息 {msg_id} 最终失败，已尝试 {retry_count} 次")
+                    logger.info(f"消息 {msg_id} 最终失败，更新统计")
 
             # 触发进度回调
             if self.progress_callback:
@@ -756,6 +778,9 @@ class TaskExecutor:
     def _add_message_to_queue(self, message: Dict[str, Any]):
         """添加消息到队列"""
         try:
+            if not hasattr(self, 'message_queue'):
+                self.message_queue = queue.Queue()
+
             priority = message.get('priority', 5)
             # 优先级队列：数字越小优先级越高
             import time
@@ -783,6 +808,7 @@ class TaskExecutor:
                 # 发送成功，记录端口信息
                 self._update_message_with_port_info(msg_id, port_info, 'success')
                 self._on_message_success(msg_id)
+                return  # 成功后直接返回，不执行后续代码！
             else:
                 # 发送失败，检查重试
                 retry_count = message.get('retry_count', 0)
