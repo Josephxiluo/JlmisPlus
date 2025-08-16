@@ -689,13 +689,34 @@ class AddTaskDialog:
                 # 批量插入消息详情
                 if task_data['targets']:
                     message_query = """
-                    INSERT INTO task_message_details (
-                        tasks_id, recipient_number, details_status, created_time
-                    ) VALUES (%s, %s, %s, %s)
-                    """
+                        INSERT INTO task_message_details (
+                            tasks_id, 
+                            recipient_number, 
+                            details_status, 
+                            retry_count,
+                            priority,
+                            created_time
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                        """
 
+                    # 根据号码类型设置不同优先级（可选的业务逻辑）
                     for phone in task_data['targets']:
-                        cursor.execute(message_query, (task_id, phone, 'pending', datetime.now()))
+                        # 可以根据号码特征设置优先级
+                        # 例如：VIP客户号码优先级更高
+                        priority = 5  # 默认优先级
+
+                        # 如果是重要号码（示例逻辑）
+                        #if phone.startswith('138') or phone.startswith('139'):
+                        #priority = 8  # VIP号段，优先级更高
+
+                        cursor.execute(message_query, (
+                            task_id,  # 任务ID
+                            phone,  # 接收号码
+                            'pending',  # 初始状态
+                            0,  # retry_count 初始为0
+                            priority,  # 优先级
+                            datetime.now()  # 创建时间
+                        ))
 
                     print(f"[DEBUG] 插入了 {len(task_data['targets'])} 条消息详情")
 

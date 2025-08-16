@@ -73,6 +73,9 @@ class SimulatedPort:
         carriers = [PortCarrier.MOBILE.value, PortCarrier.UNICOM.value, PortCarrier.TELECOM.value]
         self.carrier = carriers[self.port_index % 3]
 
+        # 修复：正确初始化 sim_number
+        self.sim_number = f"1380000{str(self.port_index).zfill(4)}"  # 生成模拟SIM卡号
+
         # 设置初始信号强度（模拟不同的信号质量）
         self.signal_strength = random.randint(15, 31)  # 中等到优秀信号
 
@@ -118,88 +121,47 @@ class SimulatedPort:
             log_port_action(self.port_name, "断开", success=True)
             return True
 
-    def send_sms(self, phone: str, content: str) -> Tuple[bool, str, float]:
-        """
-        模拟发送短信
-        返回: (成功标志, 消息, 耗时)
-        """
-        with self._lock:
-            if not self.is_connected:
-                return False, "端口未连接", 0.0
+    def send_sms(self, port_name: str, phone: str, content: str) -> Tuple[bool, str, float]:
+        """通过指定端口发送短信 - 修复版"""
+        port = self.get_port(port_name)
+        if not port:
+            return False, "端口不存在", 0.0
 
-            if self._is_sending:
-                return False, "端口正忙", 0.0
+        # 使用端口的 send_sms 方法（已经包含计数逻辑）
+        success, message, duration = port.send_sms(phone, content)
 
-            if self.send_count >= self.send_limit:
-                return False, "已达到发送上限", 0.0
+        # 记录到发送历史
+        self.send_history.append({
+            'port_name': port_name,
+            'phone_number': phone,
+            'content': content[:50],
+            'success': success,
+            'send_time': duration,
+            'timestamp': datetime.now()
+        })
 
-            # 检查发送间隔
-            if self.last_send_time:
-                elapsed = (datetime.now() - self.last_send_time).total_seconds() * 1000
-                if elapsed < self.send_interval:
-                    return False, f"发送间隔未到（需等待{self.send_interval - elapsed:.0f}ms）", 0.0
+        # 保持历史记录数量限制
+        if len(self.send_history) > 1000:
+            self.send_history = self.send_history[-500:]  # 保留最近500条
 
-            self._is_sending = True
-            self.status = SimulatedPortStatus.SENDING.value
+        return success, message, duration
 
-        try:
-            # 模拟发送延迟
-            send_time = random.uniform(*self.response_time_range)
-            time.sleep(send_time)
+    # 7. 添加获取可用端口的方法：
+    def get_available_ports(self) -> List[str]:
+        """获取所有可用的端口（已连接且未达上限）"""
+        available = []
+        for port_name, port in self.ports.items():
+            if port.is_connected and port.can_send():
+                available.append(port_name)
+        return available
 
-            # 根据成功率决定结果
-            success = random.random() < self.success_rate
-
-            # 模拟各种失败原因
-            if not success:
-                failure_reasons = [
-                    "发送超时",
-                    "号码无效",
-                    "余额不足",
-                    "网络错误",
-                    "短信内容违规",
-                    "接收方已满",
-                    "运营商拒绝",
-                    "信号太弱"
-                ]
-                # 根据信号强度调整失败原因权重
-                if self.signal_strength < 10:
-                    failure_reason = "信号太弱"
-                else:
-                    failure_reason = random.choice(failure_reasons)
-            else:
-                failure_reason = None
-
-            # 更新统计
-            with self._lock:
-                self.send_count += 1
-                self.total_sent += 1
-                self.last_send_time = datetime.now()
-                self.last_activity = datetime.now()
-
-                if success:
-                    self.success_count += 1
-                    message = f"发送成功 (耗时: {send_time:.2f}秒)"
-                else:
-                    self.failed_count += 1
-                    message = f"发送失败: {failure_reason}"
-
-                # 模拟信号波动
-                self._update_signal_strength()
-
-                self._is_sending = False
-                self.status = SimulatedPortStatus.READY.value
-
-            return success, message, send_time
-
-        except Exception as e:
-            with self._lock:
-                self._is_sending = False
-                self.status = SimulatedPortStatus.ERROR.value
-                self.error_message = str(e)
-
-            log_error(f"模拟发送短信异常: {e}")
-            return False, f"发送异常: {str(e)}", 0.0
+    # 8. 添加清除端口统计的方法：
+    def clear_port_statistics(self, port_name: str) -> bool:
+        """清除端口统计数据"""
+        if port_name in self.ports:
+            self.ports[port_name].clear_statistics()
+            return True
+        return False
 
     def _update_signal_strength(self):
         """模拟信号强度波动"""
@@ -227,6 +189,7 @@ class SimulatedPort:
             self.send_count = 0
             self.success_count = 0
             self.failed_count = 0
+            self.last_clear_time = datetime.now()
             self.total_sent = 0
             log_port_action(self.port_name, "清除统计")
 
@@ -248,6 +211,9 @@ class SimulatedPort:
                 'success_count': self.success_count,
                 'failed_count': self.failed_count,
                 'total_sent': self.total_sent,
+                'sim_number': self.sim_number,
+                'can_send': self.can_send(),
+                'usage_percent': round((self.send_count / self.send_limit * 100), 1) if self.send_limit > 0 else 0,
                 'success_rate': round(success_rate, 2),
                 'signal_strength': self.signal_strength,
                 'last_activity': self.last_activity.isoformat() if self.last_activity else None,
@@ -289,6 +255,10 @@ class PortSimulator:
         self.port_count = port_count
         self.ports: Dict[str, SimulatedPort] = {}
         self._lock = threading.Lock()
+
+        # 添加缺失的回调列表
+        self.status_change_callbacks = []  # 状态变化回调列表
+        self.send_history = []  # 发送历史记录
 
         # 配置参数
         self.default_send_interval = getattr(settings, 'DEFAULT_SEND_INTERVAL', 1000)
@@ -335,18 +305,53 @@ class PortSimulator:
         return available_ports
 
     def connect_port(self, port_name: str) -> bool:
-        """连接指定端口"""
-        port = self.get_port(port_name)
-        if port:
-            return port.connect()
+        """连接端口 - 修复版"""
+        if port_name in self.ports:
+            port = self.ports[port_name]
+            # 使用端口自己的 connect 方法
+            success = port.connect()
+
+            if success:
+                # 触发状态变化回调
+                for callback in self.status_change_callbacks:
+                    try:
+                        callback(port_name, 'connected', port.get_status_info())
+                    except Exception as e:
+                        log_error(f"回调执行失败: {e}")
+
+            return success
         return False
 
     def disconnect_port(self, port_name: str) -> bool:
-        """断开指定端口"""
-        port = self.get_port(port_name)
-        if port:
-            return port.disconnect()
+        """断开端口 - 修复版"""
+        if port_name in self.ports:
+            port = self.ports[port_name]
+            # 使用端口自己的 disconnect 方法
+            success = port.disconnect()
+
+            if success:
+                # 触发状态变化回调
+                for callback in self.status_change_callbacks:
+                    try:
+                        callback(port_name, 'disconnected', port.get_status_info())
+                    except Exception as e:
+                        log_error(f"回调执行失败: {e}")
+
+            return success
         return False
+    #添加注册回调的方法：
+    def add_status_change_callback(self, callback):
+        """添加状态变化回调"""
+        if callable(callback):
+            self.status_change_callbacks.append(callback)
+
+    def get_connected_ports(self) -> List[str]:
+        """获取所有已连接的端口名称列表"""
+        connected = []
+        for port_name, port in self.ports.items():
+            if port.is_connected:
+                connected.append(port_name)
+        return connected
 
     def send_sms(self, port_name: str, phone: str, content: str) -> Tuple[bool, str, float]:
         """通过指定端口发送短信"""

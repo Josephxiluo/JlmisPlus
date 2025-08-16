@@ -1,552 +1,439 @@
 """
-猫池短信系统积分管理服务 - tkinter版
-Credit management service for SMS Pool System - tkinter version
+猫池短信系统积分管理服务
+Credit management service for SMS Pool System
 """
 
 import sys
 import threading
-import time
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Callable
+from datetime import datetime
+from typing import Dict, Any, Optional
 from pathlib import Path
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-try:
-    from models.user import ChannelOperator
-    from config.settings import settings
-    from config.logging_config import get_logger, log_credit_action, log_error, log_info, log_timer_action
-except ImportError:
-    # 简化处理
-    class MockChannelOperator:
-        def __init__(self):
-            self.available_credits = 1000
-            self.used_credits = 0
-            self.total_credits = 1000
-
-        def refresh_credits_from_db(self):
-            return True
-
-        def consume_credits(self, amount, description=None):
-            if self.available_credits >= amount:
-                self.available_credits -= amount
-                self.used_credits += amount
-                return True
-            return False
-
-        def has_sufficient_credits(self, amount):
-            return self.available_credits >= amount
-
-    ChannelOperator = MockChannelOperator
-
-    class MockSettings:
-        CREDIT_REFRESH_INTERVAL = 300
-        SMS_RATE = 1.0
-        MMS_RATE = 3.0
-
-    settings = MockSettings()
-
-    import logging
-    def get_logger(name='services.credit'):
-        logger = logging.getLogger(name)
-        logger.setLevel(logging.INFO)
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-        return logger
-
-    def log_credit_action(user_id, action, amount, balance, details=None):
-        logger = get_logger()
-        message = f"[积分操作] 用户ID={user_id} {action} 金额={amount} 余额={balance}"
-        if details:
-            message += f" - {details}"
-        logger.info(message)
-
-    def log_error(message, error=None):
-        logger = get_logger()
-        logger.error(f"{message}: {error}" if error else message)
-
-    def log_info(message):
-        logger = get_logger()
-        logger.info(message)
-
-    def log_timer_action(timer_name, action, interval=None):
-        logger = get_logger()
-        message = f"[定时器] {timer_name} {action}"
-        if interval:
-            message += f" 间隔={interval}秒"
-        logger.debug(message)
+from config.settings import settings
+from config.logging_config import get_logger
+from database.connection import execute_query, execute_update, execute_transaction
 
 logger = get_logger('services.credit')
 
 
 class CreditService:
-    """积分管理服务类"""
+    """积分管理服务"""
 
     def __init__(self):
         """初始化积分服务"""
-        self.current_user: Optional[ChannelOperator] = None
         self._lock = threading.Lock()
-        self._refresh_timer: Optional[threading.Timer] = None
-        self._credit_change_callbacks: list = []
-        self._last_refresh_time: Optional[datetime] = None
-        self.is_initialized = False
 
         # 积分费率配置
-        self.sms_rate = getattr(settings, 'SMS_RATE', 1.0)
-        self.mms_rate = getattr(settings, 'MMS_RATE', 3.0)
+        self.sms_rate = settings.SMS_RATE  # 短信费率
+        self.mms_rate = settings.MMS_RATE  # 彩信费率
 
-        # 刷新间隔（秒）
-        self.refresh_interval = getattr(settings, 'CREDIT_REFRESH_INTERVAL', 300)  # 5分钟
+        # 预扣除记录（任务ID -> 预扣除数量）
+        self.pre_deductions: Dict[int, int] = {}
 
-    def initialize(self) -> bool:
-        """初始化服务"""
+        logger.info(f"积分服务初始化完成，短信费率: {self.sms_rate}，彩信费率: {self.mms_rate}")
+
+    def check_balance(self, operator_id: int, required_count: int,
+                     message_type: str = 'sms') -> Dict[str, Any]:
+        """检查积分余额是否充足"""
         try:
-            log_info("积分服务初始化开始")
+            # 计算所需积分
+            rate = self.sms_rate if message_type == 'sms' else self.mms_rate
+            required_credits = int(required_count * rate)
 
-            # 启动定时刷新
-            self._start_auto_refresh()
+            # 查询当前余额
+            balance = self._get_operator_balance(operator_id)
 
-            self.is_initialized = True
-            log_info(f"积分服务初始化完成，刷新间隔: {self.refresh_interval}秒")
-            return True
+            if balance is None:
+                return {'success': False, 'message': '获取余额失败'}
 
-        except Exception as e:
-            log_error("积分服务初始化失败", error=e)
-            return False
-
-    def shutdown(self):
-        """关闭服务"""
-        try:
-            log_info("积分服务开始关闭")
-
-            # 停止定时刷新
-            self._stop_auto_refresh()
-
-            # 清除回调
-            self._credit_change_callbacks.clear()
-
-            self.current_user = None
-            self.is_initialized = False
-            log_info("积分服务关闭完成")
-
-        except Exception as e:
-            log_error("积分服务关闭失败", error=e)
-
-    def get_status(self) -> Dict[str, Any]:
-        """获取服务状态"""
-        return {
-            'running': self.is_initialized,
-            'current_user': self.current_user.id if self.current_user else None,
-            'last_refresh': self._last_refresh_time.isoformat() if self._last_refresh_time else None,
-            'refresh_interval': self.refresh_interval,
-            'auto_refresh_active': self._refresh_timer is not None,
-            'sms_rate': self.sms_rate,
-            'mms_rate': self.mms_rate,
-            'message': '积分服务正常运行' if self.is_initialized else '积分服务未初始化'
-        }
-
-    def set_current_user(self, user: ChannelOperator) -> bool:
-        """设置当前用户"""
-        try:
-            with self._lock:
-                old_user_id = self.current_user.id if self.current_user else None
-                self.current_user = user
-
-                # 立即刷新一次积分
-                if user:
-                    self.refresh_credits()
-
-                log_info(f"积分服务用户切换: {old_user_id} -> {user.id if user else None}")
-                return True
-
-        except Exception as e:
-            log_error("设置当前用户失败", error=e)
-            return False
-
-    def get_current_credits(self) -> Dict[str, Any]:
-        """获取当前用户积分信息"""
-        try:
-            if not self.current_user:
+            if balance < required_credits:
                 return {
-                    'available': 0,
-                    'used': 0,
-                    'total': 0,
-                    'usage_rate': 0.0,
-                    'can_send_sms': False,
-                    'can_send_mms': False,
-                    'last_update': None
+                    'success': False,
+                    'message': f'积分不足：需要 {required_credits} 积分，当前余额 {balance} 积分',
+                    'required': required_credits,
+                    'balance': balance
                 }
 
             return {
-                **self.current_user.get_credit_summary(),
-                'last_update': self._last_refresh_time.isoformat() if self._last_refresh_time else None
+                'success': True,
+                'message': '余额充足',
+                'required': required_credits,
+                'balance': balance
             }
 
         except Exception as e:
-            log_error("获取积分信息失败", error=e)
-            return {
-                'available': 0,
-                'used': 0,
-                'total': 0,
-                'usage_rate': 0.0,
-                'can_send_sms': False,
-                'can_send_mms': False,
-                'last_update': None,
-                'error': str(e)
-            }
+            logger.error(f"检查余额失败: {e}")
+            return {'success': False, 'message': str(e)}
 
-    def refresh_credits(self) -> bool:
-        """刷新积分信息"""
+    def pre_deduct(self, operator_id: int, count: int, task_id: int,
+                   message_type: str = 'sms') -> Dict[str, Any]:
+        """预扣除积分（任务开始时）"""
         try:
-            if not self.current_user:
-                log_error("刷新积分失败：当前用户为空")
-                return False
-
             with self._lock:
-                old_credits = self.current_user.available_credits
+                # 计算积分
+                rate = self.sms_rate if message_type == 'sms' else self.mms_rate
+                credits = int(count * rate)
 
-                # 从数据库刷新积分信息
-                if self.current_user.refresh_credits_from_db():
-                    self._last_refresh_time = datetime.now()
+                # 获取当前余额
+                balance = self._get_operator_balance(operator_id)
+                if balance is None or balance < credits:
+                    return {'success': False, 'message': '余额不足'}
 
-                    # 如果积分有变化，触发回调
-                    if old_credits != self.current_user.available_credits:
-                        self._notify_credit_change(old_credits, self.current_user.available_credits)
+                # 执行预扣除
+                query = """
+                    UPDATE channel_operators
+                    SET operators_used_credits = operators_used_credits + %s
+                    WHERE operators_id = %s
+                    AND operators_total_credits - operators_used_credits >= %s
+                """
 
-                    log_info(f"积分刷新成功，余额: {self.current_user.available_credits}")
-                    return True
-                else:
-                    log_error("从数据库刷新积分失败")
-                    return False
+                affected = execute_update(query, (credits, operator_id, credits))
 
-        except Exception as e:
-            log_error("刷新积分异常", error=e)
-            return False
+                if affected:
+                    # 记录预扣除
+                    self.pre_deductions[task_id] = credits
 
-    def consume_credits(self, amount: int, message_type: str = 'sms', description: str = None) -> Dict[str, Any]:
-        """消费积分"""
-        try:
-            if not self.current_user:
-                return {
-                    'success': False,
-                    'message': '当前用户为空',
-                    'error_code': 'NO_USER'
-                }
-
-            # 计算实际消费金额
-            if message_type == 'mms':
-                actual_amount = int(amount * self.mms_rate)
-            else:
-                actual_amount = int(amount * self.sms_rate)
-
-            # 检查余额
-            if not self.current_user.has_sufficient_credits(actual_amount):
-                return {
-                    'success': False,
-                    'message': f'积分余额不足，需要{actual_amount}积分，当前余额{self.current_user.available_credits}积分',
-                    'error_code': 'INSUFFICIENT_CREDITS',
-                    'required': actual_amount,
-                    'available': self.current_user.available_credits
-                }
-
-            with self._lock:
-                old_credits = self.current_user.available_credits
-
-                # 消费积分
-                if self.current_user.consume_credits(actual_amount, description):
-                    # 触发积分变化回调
-                    self._notify_credit_change(old_credits, self.current_user.available_credits)
-
-                    log_credit_action(
-                        user_id=self.current_user.id,
-                        action="消费积分",
-                        amount=-actual_amount,
-                        balance=self.current_user.available_credits,
-                        details=f"{message_type.upper()}: {description}"
+                    # 记录日志
+                    self._log_credit_change(
+                        operator_id=operator_id,
+                        change_type='pre_deduct',
+                        amount=-credits,
+                        task_id=task_id,
+                        description=f'任务 {task_id} 预扣除 {count} 条消息积分'
                     )
 
-                    return {
-                        'success': True,
-                        'message': f'成功消费{actual_amount}积分',
-                        'consumed': actual_amount,
-                        'remaining': self.current_user.available_credits
-                    }
+                    logger.info(f"预扣除成功：用户 {operator_id}，任务 {task_id}，积分 {credits}")
+                    return {'success': True, 'message': '预扣除成功', 'credits': credits}
                 else:
-                    return {
-                        'success': False,
-                        'message': '积分消费失败',
-                        'error_code': 'CONSUME_FAILED'
-                    }
+                    return {'success': False, 'message': '预扣除失败'}
 
         except Exception as e:
-            log_error("消费积分异常", error=e)
-            return {
-                'success': False,
-                'message': f'消费积分异常: {str(e)}',
-                'error_code': 'SYSTEM_ERROR'
-            }
+            logger.error(f"预扣除失败: {e}")
+            return {'success': False, 'message': str(e)}
 
-    def check_sufficient_credits(self, amount: int, message_type: str = 'sms') -> Dict[str, Any]:
-        """检查积分是否充足"""
+    def actual_deduct(self, operator_id: int, count: int, task_id: int,
+                     message_id: Optional[int] = None, message_type: str = 'sms') -> Dict[str, Any]:
+        """实际扣除积分（消息发送成功时）"""
         try:
-            if not self.current_user:
-                return {
-                    'sufficient': False,
-                    'message': '当前用户为空',
-                    'required': 0,
-                    'available': 0
-                }
+            # 计算积分
+            rate = self.sms_rate if message_type == 'sms' else self.mms_rate
+            credits = int(count * rate)
 
-            # 计算需要的积分
-            if message_type == 'mms':
-                required_credits = int(amount * self.mms_rate)
-            else:
-                required_credits = int(amount * self.sms_rate)
+            # 记录实际消费日志
+            self._log_credit_change(
+                operator_id=operator_id,
+                change_type='consume',
+                amount=-credits,
+                task_id=task_id,
+                message_id=message_id,
+                description=f'发送成功，消费 {count} 条消息积分'
+            )
 
-            available_credits = self.current_user.available_credits
-            sufficient = available_credits >= required_credits
+            # 更新预扣除记录
+            if task_id in self.pre_deductions:
+                self.pre_deductions[task_id] -= credits
+                if self.pre_deductions[task_id] <= 0:
+                    del self.pre_deductions[task_id]
 
-            return {
-                'sufficient': sufficient,
-                'required': required_credits,
-                'available': available_credits,
-                'shortage': max(0, required_credits - available_credits),
-                'message': '积分充足' if sufficient else f'积分不足，还需要{required_credits - available_credits}积分'
-            }
+            logger.debug(f"实际扣除：用户 {operator_id}，任务 {task_id}，积分 {credits}")
+            return {'success': True, 'message': '扣除成功', 'credits': credits}
 
         except Exception as e:
-            log_error("检查积分充足性异常", error=e)
-            return {
-                'sufficient': False,
-                'required': 0,
-                'available': 0,
-                'shortage': 0,
-                'message': f'检查失败: {str(e)}'
-            }
+            logger.error(f"实际扣除失败: {e}")
+            return {'success': False, 'message': str(e)}
 
-    def calculate_sending_cost(self, sms_count: int = 0, mms_count: int = 0) -> Dict[str, Any]:
-        """计算发送成本"""
+    def rollback(self, operator_id: int, count: int, task_id: int,
+                message_type: str = 'sms') -> Dict[str, Any]:
+        """回退积分（发送失败或任务取消时）"""
         try:
-            sms_cost = int(sms_count * self.sms_rate)
-            mms_cost = int(mms_count * self.mms_rate)
-            total_cost = sms_cost + mms_cost
+            with self._lock:
+                # 计算积分
+                rate = self.sms_rate if message_type == 'sms' else self.mms_rate
+                credits = int(count * rate)
 
-            current_credits = self.current_user.available_credits if self.current_user else 0
+                # 回退积分
+                query = """
+                    UPDATE channel_operators
+                    SET operators_used_credits = GREATEST(0, operators_used_credits - %s)
+                    WHERE operators_id = %s
+                """
 
-            return {
-                'sms_count': sms_count,
-                'mms_count': mms_count,
-                'sms_cost': sms_cost,
-                'mms_cost': mms_cost,
-                'total_cost': total_cost,
-                'current_credits': current_credits,
-                'sufficient': current_credits >= total_cost,
-                'shortage': max(0, total_cost - current_credits)
-            }
+                affected = execute_update(query, (credits, operator_id))
+
+                if affected:
+                    # 更新预扣除记录
+                    if task_id in self.pre_deductions:
+                        self.pre_deductions[task_id] -= credits
+                        if self.pre_deductions[task_id] <= 0:
+                            del self.pre_deductions[task_id]
+
+                    # 记录日志
+                    self._log_credit_change(
+                        operator_id=operator_id,
+                        change_type='rollback',
+                        amount=credits,
+                        task_id=task_id,
+                        description=f'任务 {task_id} 回退 {count} 条消息积分'
+                    )
+
+                    logger.info(f"回退成功：用户 {operator_id}，任务 {task_id}，积分 {credits}")
+                    return {'success': True, 'message': '回退成功', 'credits': credits}
+                else:
+                    return {'success': False, 'message': '回退失败'}
 
         except Exception as e:
-            log_error("计算发送成本异常", error=e)
-            return {
-                'sms_count': sms_count,
-                'mms_count': mms_count,
-                'sms_cost': 0,
-                'mms_cost': 0,
-                'total_cost': 0,
-                'current_credits': 0,
-                'sufficient': False,
-                'shortage': 0,
-                'error': str(e)
-            }
+            logger.error(f"回退积分失败: {e}")
+            return {'success': False, 'message': str(e)}
 
-    def get_credit_usage_stats(self, days: int = 30) -> Dict[str, Any]:
-        """获取积分使用统计"""
+    def recharge(self, operator_id: int, amount: int, admin_id: int,
+                description: str = None) -> Dict[str, Any]:
+        """充值积分（管理员操作）"""
         try:
-            if not self.current_user:
-                return {
-                    'total_used': 0,
-                    'daily_average': 0,
-                    'usage_trend': [],
-                    'message': '当前用户为空'
-                }
+            with self._lock:
+                # 更新积分
+                query = """
+                    UPDATE channel_operators
+                    SET operators_total_credits = operators_total_credits + %s
+                    WHERE operators_id = %s
+                """
 
-            # 这里可以从数据库获取详细的使用统计
-            # 暂时返回基础信息
-            total_used = self.current_user.used_credits
-            daily_average = total_used / max(days, 1)
+                affected = execute_update(query, (amount, operator_id))
 
-            return {
-                'total_used': total_used,
-                'total_available': self.current_user.available_credits,
-                'total_credits': self.current_user.total_credits,
-                'daily_average': round(daily_average, 2),
-                'usage_rate': round(total_used / self.current_user.total_credits * 100, 2) if self.current_user.total_credits > 0 else 0,
-                'days_remaining': round(self.current_user.available_credits / max(daily_average, 1), 1) if daily_average > 0 else float('inf'),
-                'last_refresh': self._last_refresh_time.isoformat() if self._last_refresh_time else None
-            }
+                if affected:
+                    # 记录日志
+                    self._log_credit_change(
+                        operator_id=operator_id,
+                        change_type='recharge',
+                        amount=amount,
+                        operator_id_param=admin_id,
+                        description=description or f'管理员 {admin_id} 充值'
+                    )
+
+                    logger.info(f"充值成功：用户 {operator_id}，金额 {amount}")
+                    return {'success': True, 'message': '充值成功', 'amount': amount}
+                else:
+                    return {'success': False, 'message': '充值失败'}
 
         except Exception as e:
-            log_error("获取积分使用统计异常", error=e)
-            return {
-                'total_used': 0,
-                'daily_average': 0,
-                'usage_trend': [],
-                'error': str(e)
-            }
+            logger.error(f"充值失败: {e}")
+            return {'success': False, 'message': str(e)}
 
-    def add_credit_change_callback(self, callback: Callable[[int, int], None]):
-        """添加积分变化回调函数"""
+    def get_balance(self, operator_id: int) -> Dict[str, Any]:
+        """获取用户余额信息"""
         try:
-            if callable(callback):
-                self._credit_change_callbacks.append(callback)
-                log_info(f"添加积分变化回调函数，当前回调数量: {len(self._credit_change_callbacks)}")
-        except Exception as e:
-            log_error("添加积分变化回调失败", error=e)
+            query = """
+                SELECT operators_total_credits as total,
+                       operators_used_credits as used,
+                       operators_total_credits - operators_used_credits as available
+                FROM channel_operators
+                WHERE operators_id = %s
+            """
 
-    def remove_credit_change_callback(self, callback: Callable[[int, int], None]):
-        """移除积分变化回调函数"""
-        try:
-            if callback in self._credit_change_callbacks:
-                self._credit_change_callbacks.remove(callback)
-                log_info(f"移除积分变化回调函数，当前回调数量: {len(self._credit_change_callbacks)}")
-        except Exception as e:
-            log_error("移除积分变化回调失败", error=e)
+            result = execute_query(query, (operator_id,), fetch_one=True, dict_cursor=True)
 
-    def set_refresh_interval(self, interval_seconds: int):
-        """设置刷新间隔"""
-        try:
-            if interval_seconds < 30:  # 最小30秒
-                interval_seconds = 30
-            elif interval_seconds > 3600:  # 最大1小时
-                interval_seconds = 3600
-
-            old_interval = self.refresh_interval
-            self.refresh_interval = interval_seconds
-
-            # 重启定时器
-            if self.is_initialized:
-                self._stop_auto_refresh()
-                self._start_auto_refresh()
-
-            log_info(f"积分刷新间隔已更新: {old_interval}秒 -> {interval_seconds}秒")
-
-        except Exception as e:
-            log_error("设置刷新间隔失败", error=e)
-
-    def force_refresh(self) -> Dict[str, Any]:
-        """强制刷新积分"""
-        try:
-            log_info("执行强制积分刷新")
-
-            if self.refresh_credits():
+            if result:
                 return {
                     'success': True,
-                    'message': '积分刷新成功',
-                    'credits': self.get_current_credits(),
-                    'refresh_time': self._last_refresh_time.isoformat() if self._last_refresh_time else None
+                    'total': result['total'],
+                    'used': result['used'],
+                    'available': result['available']
                 }
             else:
-                return {
-                    'success': False,
-                    'message': '积分刷新失败',
-                    'error_code': 'REFRESH_FAILED'
-                }
+                return {'success': False, 'message': '用户不存在'}
 
         except Exception as e:
-            log_error("强制刷新积分异常", error=e)
+            logger.error(f"获取余额失败: {e}")
+            return {'success': False, 'message': str(e)}
+
+    def get_credit_logs(self, operator_id: int, limit: int = 50) -> Dict[str, Any]:
+        """获取积分变动日志"""
+        try:
+            query = """
+                SELECT change_type, change_amount, description, created_time
+                FROM operator_credit_logs
+                WHERE operators_id = %s
+                ORDER BY created_time DESC
+                LIMIT %s
+            """
+
+            logs = execute_query(query, (operator_id, limit), dict_cursor=True)
+
             return {
-                'success': False,
-                'message': f'刷新异常: {str(e)}',
-                'error_code': 'SYSTEM_ERROR'
+                'success': True,
+                'logs': [dict(log) for log in logs] if logs else []
             }
 
-    def _start_auto_refresh(self):
-        """启动自动刷新"""
+        except Exception as e:
+            logger.error(f"获取积分日志失败: {e}")
+            return {'success': False, 'message': str(e), 'logs': []}
+
+    def refresh_all_balances(self) -> Dict[str, Any]:
+        """刷新所有用户余额（定时任务调用）"""
         try:
-            if self._refresh_timer:
-                self._refresh_timer.cancel()
+            # 这里可以实现余额同步逻辑
+            # 例如：从外部系统同步余额数据
 
-            self._refresh_timer = threading.Timer(self.refresh_interval, self._auto_refresh_callback)
-            self._refresh_timer.daemon = True
-            self._refresh_timer.start()
-
-            log_timer_action("积分自动刷新", "启动", self.refresh_interval)
+            logger.info("刷新所有用户余额")
+            return {'success': True, 'message': '余额刷新完成'}
 
         except Exception as e:
-            log_error("启动自动刷新失败", error=e)
+            logger.error(f"刷新余额失败: {e}")
+            return {'success': False, 'message': str(e)}
 
-    def _stop_auto_refresh(self):
-        """停止自动刷新"""
+    def _get_operator_balance(self, operator_id: int) -> Optional[int]:
+        """获取操作员可用余额"""
         try:
-            if self._refresh_timer:
-                self._refresh_timer.cancel()
-                self._refresh_timer = None
-                log_timer_action("积分自动刷新", "停止")
+            query = """
+                SELECT operators_total_credits - operators_used_credits as available
+                FROM channel_operators
+                WHERE operators_id = %s
+            """
+
+            result = execute_query(query, (operator_id,), fetch_one=True)
+            return result[0] if result else None
 
         except Exception as e:
-            log_error("停止自动刷新失败", error=e)
-
-    def _auto_refresh_callback(self):
-        """自动刷新回调"""
-        try:
-            if self.current_user and self.is_initialized:
-                self.refresh_credits()
-
-            # 重新启动定时器
-            if self.is_initialized:
-                self._start_auto_refresh()
-
-        except Exception as e:
-            log_error("自动刷新回调异常", error=e)
-            # 即使出错也要重新启动定时器
-            if self.is_initialized:
-                self._start_auto_refresh()
-
-    def _notify_credit_change(self, old_credits: int, new_credits: int):
-        """通知积分变化"""
-        try:
-            for callback in self._credit_change_callbacks:
-                try:
-                    callback(old_credits, new_credits)
-                except Exception as e:
-                    log_error("积分变化回调执行失败", error=e)
-
-        except Exception as e:
-            log_error("通知积分变化失败", error=e)
-
-    def get_low_credit_warning(self, threshold: int = 100) -> Optional[Dict[str, Any]]:
-        """获取低积分警告"""
-        try:
-            if not self.current_user:
-                return None
-
-            available_credits = self.current_user.available_credits
-
-            if available_credits <= threshold:
-                # 计算还能发送多少条消息
-                sms_remaining = int(available_credits / self.sms_rate)
-                mms_remaining = int(available_credits / self.mms_rate)
-
-                return {
-                    'warning': True,
-                    'available_credits': available_credits,
-                    'threshold': threshold,
-                    'sms_remaining': sms_remaining,
-                    'mms_remaining': mms_remaining,
-                    'message': f'积分余额不足！当前余额: {available_credits}积分，还可发送{sms_remaining}条短信或{mms_remaining}条彩信',
-                    'severity': 'critical' if available_credits <= threshold // 2 else 'warning'
-                }
-
+            logger.error(f"获取操作员余额失败: {e}")
             return None
 
+    def _log_credit_change(self, operator_id: int, change_type: str, amount: int,
+                          task_id: Optional[int] = None,
+                          message_id: Optional[int] = None,
+                          operator_id_param: Optional[int] = None,
+                          description: str = None):
+        """记录积分变动日志"""
+        try:
+            # 获取变动前余额
+            balance = self._get_operator_balance(operator_id)
+            if balance is None:
+                balance = 0
+
+            # 获取渠道用户ID
+            channel_query = """
+                SELECT channel_users_id
+                FROM channel_operators
+                WHERE operators_id = %s
+            """
+            channel_result = execute_query(channel_query, (operator_id,), fetch_one=True)
+            channel_users_id = channel_result[0] if channel_result else None
+
+            # 插入日志
+            insert_query = """
+                INSERT INTO operator_credit_logs (
+                    operators_id, channel_users_id, change_type, change_amount,
+                    before_balance, after_balance, related_task_id, related_message_id,
+                    operator_type, operator_by, description, created_time
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+
+            params = (
+                operator_id,
+                channel_users_id,
+                change_type,
+                amount,
+                balance,
+                balance + amount,
+                task_id,
+                message_id,
+                'system' if not operator_id_param else 'admin',
+                operator_id_param,
+                description,
+                datetime.now()
+            )
+
+            execute_update(insert_query, params)
+
         except Exception as e:
-            log_error("获取低积分警告异常", error=e)
-            return None
+            logger.error(f"记录积分日志失败: {e}")
+
+    def get_statistics(self, operator_id: int,
+                       start_date: Optional[datetime] = None,
+                       end_date: Optional[datetime] = None) -> Dict[str, Any]:
+        """获取积分统计信息"""
+        try:
+            # 构建查询条件
+            where_conditions = ["operators_id = %s"]
+            params = [operator_id]
+
+            if start_date:
+                where_conditions.append("created_time >= %s")
+                params.append(start_date)
+
+            if end_date:
+                where_conditions.append("created_time <= %s")
+                params.append(end_date)
+
+            where_clause = " AND ".join(where_conditions)
+
+            # 统计查询
+            query = f"""
+                SELECT 
+                    change_type,
+                    COUNT(*) as count,
+                    SUM(ABS(change_amount)) as total_amount
+                FROM operator_credit_logs
+                WHERE {where_clause}
+                GROUP BY change_type
+            """
+
+            results = execute_query(query, tuple(params), dict_cursor=True)
+
+            # 处理结果
+            stats = {
+                'total_recharge': 0,
+                'total_consume': 0,
+                'total_rollback': 0,
+                'transaction_count': 0
+            }
+
+            for row in results:
+                change_type = row['change_type']
+                count = row['count']
+                amount = row['total_amount']
+
+                if change_type == 'recharge':
+                    stats['total_recharge'] = amount
+                elif change_type in ['consume', 'pre_deduct']:
+                    stats['total_consume'] += amount
+                elif change_type == 'rollback':
+                    stats['total_rollback'] = amount
+
+                stats['transaction_count'] += count
+
+            # 获取当前余额
+            balance_info = self.get_balance(operator_id)
+            if balance_info['success']:
+                stats.update({
+                    'current_total': balance_info['total'],
+                    'current_used': balance_info['used'],
+                    'current_available': balance_info['available']
+                })
+
+            return {'success': True, 'statistics': stats}
+
+        except Exception as e:
+            logger.error(f"获取积分统计失败: {e}")
+            return {'success': False, 'message': str(e), 'statistics': {}}
+
+    def cleanup_pre_deductions(self):
+        """清理预扣除记录（定期维护）"""
+        try:
+            # 清理超过24小时的预扣除记录
+            # 实际项目中应该根据任务状态来清理
+            self.pre_deductions.clear()
+            logger.info("清理预扣除记录完成")
+
+        except Exception as e:
+            logger.error(f"清理预扣除记录失败: {e}")
 
 
 # 全局积分服务实例
 credit_service = CreditService()
+
+# 将积分服务注入到任务执行器
+from core.task_executor import task_executor
+task_executor.set_credit_service(credit_service)

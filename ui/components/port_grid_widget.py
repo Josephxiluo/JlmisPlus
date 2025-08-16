@@ -526,37 +526,70 @@ class PortGridWidget:
             messagebox.showerror("错误", f"打开配置对话框失败：{str(e)}")
 
     def start_selected_ports(self):
-        """启动选中的端口"""
+        """启动选中的端口 - 修复版"""
         if not self.selected_ports:
             messagebox.showwarning("警告", "请先选择要启动的端口")
             return
 
         if messagebox.askyesno("确认启动", f"确定要启动选中的 {len(self.selected_ports)} 个端口吗？"):
             try:
-                result = self.port_service.start_ports(list(self.selected_ports))
-                if result['success']:
-                    messagebox.showinfo("成功", f"已启动 {result.get('count', 0)} 个端口")
-                    self.refresh_ports()
+                success_count = 0
+
+                # 使用端口服务连接每个选中的端口
+                for port_id in self.selected_ports:
+                    port_name = f"COM{port_id}"
+
+                    # 调用端口服务的连接方法
+                    result = self.port_service.connect_port(port_name)
+                    if result.get('success'):
+                        success_count += 1
+                        print(f"[DEBUG] 端口 {port_name} 启动成功")
+
+                        # 更新端口卡片显示
+                        if port_id in self.port_cards:
+                            card_info = self.port_cards[port_id]
+                            # 更新状态显示（如果有状态标签）
+                            # 这里可以更新UI显示
+
+                if success_count > 0:
+                    messagebox.showinfo("成功", f"已启动 {success_count} 个端口")
+                    self.refresh_ports()  # 刷新端口显示
                 else:
-                    messagebox.showerror("失败", result.get('message', '启动失败'))
+                    messagebox.showerror("失败", "没有成功启动任何端口")
+
             except Exception as e:
+                print(f"[ERROR] 启动端口失败: {e}")
+                import traceback
+                traceback.print_exc()
                 messagebox.showerror("错误", f"启动端口失败：{str(e)}")
 
     def stop_selected_ports(self):
-        """停止选中的端口"""
+        """停止选中的端口 - 修复版"""
         if not self.selected_ports:
             messagebox.showwarning("警告", "请先选择要停止的端口")
             return
 
         if messagebox.askyesno("确认停止", f"确定要停止选中的 {len(self.selected_ports)} 个端口吗？"):
             try:
-                result = self.port_service.stop_ports(list(self.selected_ports))
-                if result['success']:
-                    messagebox.showinfo("成功", f"已停止 {result.get('count', 0)} 个端口")
+                success_count = 0
+
+                for port_id in self.selected_ports:
+                    port_name = f"COM{port_id}"
+
+                    # 调用端口服务的断开方法
+                    result = self.port_service.disconnect_port(port_name)
+                    if result.get('success'):
+                        success_count += 1
+                        print(f"[DEBUG] 端口 {port_name} 停止成功")
+
+                if success_count > 0:
+                    messagebox.showinfo("成功", f"已停止 {success_count} 个端口")
                     self.refresh_ports()
                 else:
-                    messagebox.showerror("失败", result.get('message', '停止失败'))
+                    messagebox.showerror("失败", "没有成功停止任何端口")
+
             except Exception as e:
+                print(f"[ERROR] 停止端口失败: {e}")
                 messagebox.showerror("错误", f"停止端口失败：{str(e)}")
 
     def clear_all_records(self):

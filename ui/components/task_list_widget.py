@@ -318,11 +318,16 @@ class TaskListWidget:
         self.current_page = 1
         self.page_size = 20
 
-        print(f"[DEBUG] TaskListWidget初始化 - user_info: {user_info}")
+        # 添加自动刷新相关属性
+        self.auto_refresh_timer = None
+        self.is_auto_refreshing = False
+        self.refresh_interval = 3  # 3秒刷新一次
 
         self.create_widgets()
         self.create_context_menu()
         self.load_tasks()
+
+        print(f"[DEBUG] TaskListWidget初始化 - user_info: {user_info}")
 
     def create_widgets(self):
         """创建现代化任务列表组件"""
@@ -743,27 +748,69 @@ class TaskListWidget:
             self.on_task_select(task)
 
     def start_task_by_id(self, task_id):
-        """通过ID开始任务"""
+        """通过ID开始任务 - 修复版"""
         try:
-            result = self.task_service.start_task(task_id)
+            # 1. 首先检查是否有端口已连接
+            from services.port_service import port_service
+            ports_result = port_service.get_ports()
+
+            if ports_result.get('success'):
+                ports = ports_result.get('ports', [])
+                # 检查是否有连接的端口
+                connected_ports = [p for p in ports if p.get('is_connected', False)]
+
+                if not connected_ports:
+                    messagebox.showwarning(
+                        "警告",
+                        "请先启动至少一个端口！\n请在右侧端口管理中选择端口并点击'启动端口'"
+                    )
+                    return
+
+            # 2. 使用真实的任务服务来启动任务
+            from services.task_service import task_service
+            result = task_service.start_task(task_id)
+
             if result['success']:
-                messagebox.showinfo("成功", "任务已开始")
+                messagebox.showinfo("成功", f"任务已开始执行，使用 {len(connected_ports)} 个端口")
+
+                # 启动自动刷新
+                self.start_auto_refresh()
+
+                # 刷新任务列表显示
                 self.refresh_tasks()
+
+                # 更新任务项的状态显示（如果存在）
+                if task_id in self.task_items:
+                    item = self.task_items[task_id]
+                    item['status_badge'].configure(text="运行中")
             else:
                 messagebox.showerror("失败", result.get('message', '开始任务失败'))
+
         except Exception as e:
+            print(f"[ERROR] 开始任务失败: {e}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("错误", f"开始任务失败：{str(e)}")
 
     def pause_task_by_id(self, task_id):
-        """通过ID暂停任务"""
+        """通过ID暂停任务 - 修复版"""
         try:
-            result = self.task_service.pause_task(task_id)
+            from services.task_service import task_service
+            result = task_service.pause_task(task_id)
+
             if result['success']:
                 messagebox.showinfo("成功", "任务已暂停")
                 self.refresh_tasks()
+
+                # 更新任务项的状态显示
+                if task_id in self.task_items:
+                    item = self.task_items[task_id]
+                    item['status_badge'].configure(text="已暂停")
             else:
                 messagebox.showerror("失败", result.get('message', '暂停任务失败'))
+
         except Exception as e:
+            print(f"[ERROR] 暂停任务失败: {e}")
             messagebox.showerror("错误", f"暂停任务失败：{str(e)}")
 
     def show_task_menu(self, task, widget):
@@ -1068,6 +1115,59 @@ class TaskListWidget:
     def get_frame(self):
         """获取组件框架"""
         return self.card_container
+
+    def start_auto_refresh(self):
+        """开始自动刷新"""
+        if not self.is_auto_refreshing:
+            self.is_auto_refreshing = True
+            self._schedule_refresh()
+            print("[DEBUG] 启动自动刷新，间隔: {}秒".format(self.refresh_interval))
+
+    def stop_auto_refresh(self):
+        """停止自动刷新"""
+        self.is_auto_refreshing = False
+        if self.auto_refresh_timer:
+            self.parent.after_cancel(self.auto_refresh_timer)
+            self.auto_refresh_timer = None
+            print("[DEBUG] 停止自动刷新")
+
+    def _schedule_refresh(self):
+        """调度下一次刷新"""
+        if self.is_auto_refreshing:
+            # 执行刷新
+            self._auto_refresh_tasks()
+
+            # 调度下一次刷新（使用tkinter的after方法）
+            self.auto_refresh_timer = self.parent.after(
+                self.refresh_interval * 1000,  # 转换为毫秒
+                self._schedule_refresh
+            )
+
+    def _auto_refresh_tasks(self):
+        """自动刷新任务状态（轻量级更新）"""
+        try:
+            # 检查是否有运行中的任务
+            has_running_tasks = False
+
+            for task in self.tasks:
+                if task.get('status') in ['running', 'sending']:
+                    has_running_tasks = True
+                    break
+
+            if has_running_tasks:
+                # 只在有运行中的任务时刷新
+                print("[DEBUG] 自动刷新任务列表...")
+                self.load_tasks()  # 重新加载任务数据
+            else:
+                # 没有运行中的任务，停止自动刷新
+                self.stop_auto_refresh()
+
+        except Exception as e:
+            print(f"[ERROR] 自动刷新失败: {e}")
+
+    def __del__(self):
+        """析构函数，确保停止定时器"""
+        self.stop_auto_refresh()
 
 
 def main():
