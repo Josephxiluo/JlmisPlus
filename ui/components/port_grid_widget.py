@@ -13,66 +13,26 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from ui.styles import get_color, get_font, get_spacing, create_modern_button, create_card_frame, create_scrollable_frame, create_label, create_checkbox
 
 try:
-    from services.port_service import PortService
+    # 修正导入：使用实例而不是类
+    from services.port_service import port_service
+    USE_REAL_SERVICE = True
 except ImportError:
-    # 模拟端口服务
-    class PortService:
+    USE_REAL_SERVICE = False
+    # 模拟端口服务 - 作为备用
+    class MockPortService:
         def get_ports(self):
             mock_ports = [
                 {
-                    'id': 101,
-                    'name': 'COM101',
-                    'carrier': '中国联通',
-                    'status': 'idle',
+                    'id': i,
+                    'name': f'COM{i}',
+                    'carrier': ['中国联通', '中国电信', '中国移动'][i % 3],
+                    'status': ['idle', 'working', 'busy', 'error', 'offline'][i % 5],
                     'limit': 60,
-                    'success_count': 45,
-                    'failed_count': 3
-                },
-                {
-                    'id': 102,
-                    'name': 'COM102',
-                    'carrier': '中国电信',
-                    'status': 'working',
-                    'limit': 60,
-                    'success_count': 38,
-                    'failed_count': 2
-                },
-                {
-                    'id': 103,
-                    'name': 'COM103',
-                    'carrier': '中国移动',
-                    'status': 'busy',
-                    'limit': 60,
-                    'success_count': 55,
-                    'failed_count': 1
-                },
-                {
-                    'id': 104,
-                    'name': 'COM104',
-                    'carrier': '中国联通',
-                    'status': 'error',
-                    'limit': 60,
-                    'success_count': 12,
-                    'failed_count': 8
-                },
-                {
-                    'id': 105,
-                    'name': 'COM105',
-                    'carrier': '中国电信',
-                    'status': 'offline',
-                    'limit': 60,
-                    'success_count': 0,
-                    'failed_count': 0
-                },
-                {
-                    'id': 106,
-                    'name': 'COM106',
-                    'carrier': '中国移动',
-                    'status': 'idle',
-                    'limit': 60,
-                    'success_count': 28,
-                    'failed_count': 2
+                    'send_count': i * 5 % 60,
+                    'success_count': i * 4 % 50,
+                    'failed_count': i % 5
                 }
+                for i in range(1, 21)  # 生成20个模拟端口
             ]
             return {'success': True, 'ports': mock_ports}
 
@@ -96,7 +56,13 @@ class PortGridWidget:
         self.parent = parent
         self.user_info = user_info
         self.on_port_select = on_port_select
-        self.port_service = PortService()
+
+        # 使用全局端口服务实例或模拟服务
+        if USE_REAL_SERVICE:
+            self.port_service = port_service
+        else:
+            self.port_service = MockPortService()
+
         self.selected_ports = set()
         self.port_cards = {}
         self.ports_data = []
@@ -227,7 +193,7 @@ class PortGridWidget:
                 self.ports_data = result['ports']
                 self.update_port_grid()
             else:
-                messagebox.showerror("错误", f"加载端口数据失败：{result['message']}")
+                messagebox.showerror("错误", f"加载端口数据失败：{result.get('message', '未知错误')}")
         except Exception as e:
             messagebox.showerror("错误", f"加载端口数据失败：{str(e)}")
 
@@ -242,7 +208,7 @@ class PortGridWidget:
             return
 
         # 计算列数（根据容器宽度自动调整）
-        cols = 2  # 默认3列，可以根据实际情况调整
+        cols = 2  # 默认2列，可以根据实际情况调整
 
         # 创建端口网格
         for i, port in enumerate(self.ports_data):
@@ -291,18 +257,18 @@ class PortGridWidget:
             text="",
             variable=port_var,
             command=lambda: self.on_port_selection_change(port_id, port_var.get()),
-            width=18,  # 整体宽度16px（比默认小）
-            height=18,  # 整体高度16px（比默认小）
-            checkbox_width=16,  # 复选框本体12px
-            checkbox_height=16,  # 复选框本体12px
-            corner_radius=2,  # 小圆角
-            border_width=1,  # 细边框
+            width=18,
+            height=18,
+            checkbox_width=16,
+            checkbox_height=16,
+            corner_radius=2,
+            border_width=1,
             fg_color=get_color('primary'),
             hover_color=get_color('primary_hover'),
             checkmark_color='white',
             text_color=get_color('text')
         )
-        port_check.pack(side='left', padx=(0, 6))  # 右侧留6px间距
+        port_check.pack(side='left', padx=(0, 6))
 
         # 端口名称
         port_name = port.get('name', f"COM{port_id}")
@@ -318,8 +284,8 @@ class PortGridWidget:
         carrier_info.pack(side='right')
 
         # 运营商图标和名称
-        carrier_icon = self.get_carrier_icon(port.get('carrier', '中国联通'))
-        carrier_color = self.get_carrier_color(port.get('carrier', '中国联通'))
+        carrier_icon = self.get_carrier_icon(port.get('carrier', '未知'))
+        carrier_color = self.get_carrier_color(port.get('carrier', '未知'))
 
         carrier_frame = ctk.CTkFrame(carrier_info, fg_color='transparent')
         carrier_frame.pack()
@@ -335,7 +301,7 @@ class PortGridWidget:
 
         carrier_label = create_label(
             carrier_frame,
-            text=port.get('carrier', '中国联通'),
+            text=port.get('carrier', '未知'),
             style="medium"
         )
         carrier_label.pack(side='left', padx=(get_spacing('xs'), 0))
@@ -376,21 +342,23 @@ class PortGridWidget:
         success_info = ctk.CTkFrame(stats_frame, fg_color='transparent')
         success_info.pack(side='right')
 
-        self.success_label = create_label(
+        success_label = create_label(
             success_info,
-            text=f"✓ {port.get('success_count', 0)}",
+            text=f"✔ {port.get('success_count', 0)}",
             style="medium"
         )
-        self.success_label.configure(text_color=get_color('success'))
-        self.success_label.pack()
+        success_label.configure(text_color=get_color('success'))
+        success_label.pack()
 
         # 进度条区域（如果有使用情况）
-        if port.get('success_count', 0) > 0:
+        send_count = port.get('send_count', 0)
+        limit = port.get('limit', 60)
+        if send_count > 0 and limit > 0:
             progress_frame = ctk.CTkFrame(content_container, fg_color='transparent')
             progress_frame.pack(fill='x', pady=(0, get_spacing('sm')))
 
             # 计算使用率
-            usage_rate = min(port.get('success_count', 0) / port.get('limit', 60), 1.0)
+            usage_rate = min(send_count / limit, 1.0)
             progress_color = self.get_usage_color(usage_rate)
 
             # 现代化进度条
@@ -409,7 +377,7 @@ class PortGridWidget:
             'frame': port_frame,
             'var': port_var,
             'port': port,
-            'success_label': self.success_label,
+            'success_label': success_label,
             'content_container': content_container,
             'checkbox': port_check
         }
@@ -432,7 +400,10 @@ class PortGridWidget:
             '中国联通': '🔵',
             '中国电信': '🔴',
             '中国移动': '🟢',
-            '中国广电': '🟡'
+            '中国广电': '🟡',
+            'unicom': '🔵',
+            'telecom': '🔴',
+            'mobile': '🟢'
         }
         return icons.get(carrier, '📱')
 
@@ -442,7 +413,10 @@ class PortGridWidget:
             '中国联通': '#1E88E5',
             '中国电信': '#E53935',
             '中国移动': '#43A047',
-            '中国广电': '#FB8C00'
+            '中国广电': '#FB8C00',
+            'unicom': '#1E88E5',
+            'telecom': '#E53935',
+            'mobile': '#43A047'
         }
         return colors.get(carrier, get_color('primary'))
 
@@ -450,7 +424,9 @@ class PortGridWidget:
         """获取状态颜色"""
         colors = {
             'idle': get_color('gray'),
+            'ready': get_color('success'),
             'working': get_color('primary'),
+            'sending': get_color('primary'),
             'busy': get_color('warning'),
             'error': get_color('danger'),
             'offline': get_color('text_hint')
@@ -461,7 +437,9 @@ class PortGridWidget:
         """获取状态文字"""
         texts = {
             'idle': '空闲',
+            'ready': '就绪',
             'working': '工作中',
+            'sending': '发送中',
             'busy': '繁忙',
             'error': '错误',
             'offline': '离线'
@@ -560,7 +538,7 @@ class PortGridWidget:
                     messagebox.showinfo("成功", f"已启动 {result.get('count', 0)} 个端口")
                     self.refresh_ports()
                 else:
-                    messagebox.showerror("失败", result['message'])
+                    messagebox.showerror("失败", result.get('message', '启动失败'))
             except Exception as e:
                 messagebox.showerror("错误", f"启动端口失败：{str(e)}")
 
@@ -577,7 +555,7 @@ class PortGridWidget:
                     messagebox.showinfo("成功", f"已停止 {result.get('count', 0)} 个端口")
                     self.refresh_ports()
                 else:
-                    messagebox.showerror("失败", result['message'])
+                    messagebox.showerror("失败", result.get('message', '停止失败'))
             except Exception as e:
                 messagebox.showerror("错误", f"停止端口失败：{str(e)}")
 
@@ -590,7 +568,7 @@ class PortGridWidget:
                     messagebox.showinfo("成功", "已清除所有端口记录")
                     self.refresh_ports()
                 else:
-                    messagebox.showerror("失败", result['message'])
+                    messagebox.showerror("失败", result.get('message', '清除失败'))
             except Exception as e:
                 messagebox.showerror("错误", f"清除记录失败：{str(e)}")
 
@@ -607,7 +585,7 @@ class PortGridWidget:
                     messagebox.showinfo("成功", f"已清除 {result.get('count', 0)} 个端口的记录")
                     self.refresh_ports()
                 else:
-                    messagebox.showerror("失败", result['message'])
+                    messagebox.showerror("失败", result.get('message', '清除失败'))
             except Exception as e:
                 messagebox.showerror("错误", f"清除记录失败：{str(e)}")
 
@@ -624,7 +602,7 @@ class PortGridWidget:
         if port_id in self.port_cards:
             success_label = self.port_cards[port_id]['success_label']
             success_count = status_data.get('success_count', 0)
-            success_label.configure(text=f"✓ {success_count}")
+            success_label.configure(text=f"✔ {success_count}")
 
     def refresh_ports(self):
         """刷新端口数据"""

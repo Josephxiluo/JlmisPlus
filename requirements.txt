@@ -1,34 +1,87 @@
-# 猫池短信系统依赖库
-# SMS Pool System Dependencies
+# 猫池短信系统依赖库 - 优化版
+# SMS Pool System Dependencies - Optimized Version
 
-# 核心依赖
-psycopg2-binary>=2.9.0      # PostgreSQL数据库连接
-bcrypt>=4.0.0               # 密码加密
-python-dotenv>=1.0.0        # 环境变量加载
+# ====================================
+# 核心运行时依赖
+# ====================================
+
+# 数据库连接
+psycopg2-binary>=2.9.0,<3.0.0    # PostgreSQL数据库连接
+
+# 密码和安全
+bcrypt>=4.0.0,<5.0.0              # 密码加密
+python-dotenv>=1.0.0,<2.0.0      # 环境变量加载
 
 # 串口通信
-pyserial>=3.5               # 串口通信库
+pyserial>=3.5,<4.0                # 串口通信库
 
 # 文件处理
-pandas>=1.5.0               # 数据处理
-openpyxl>=3.1.0             # Excel文件处理
-xlsxwriter>=3.0.0           # Excel写入
+pandas>=1.5.0,<3.0.0             # 数据处理和分析
+openpyxl>=3.1.0,<4.0.0           # Excel文件读写
+xlsxwriter>=3.0.0,<4.0.0         # Excel文件创建
 
 # 网络和系统
-requests>=2.28.0            # HTTP请求
-psutil>=5.9.0               # 系统信息获取
+requests>=2.28.0,<3.0.0          # HTTP请求
+psutil>=5.9.0,<6.0.0             # 系统信息获取
 
 # 时间处理
-python-dateutil>=2.8.0      # 日期时间处理
+python-dateutil>=2.8.0,<3.0.0    # 日期时间处理
 
 # 数据验证
-pydantic>=1.10.0            # 数据验证
+pydantic>=1.10.0,<3.0.0          # 数据验证和设置管理
 
-# 开发和测试工具
-pytest>=7.0.0               # 测试框架
-pytest-cov>=4.0.0           # 测试覆盖率
+# ====================================
+# 开发和测试依赖（生产环境可选）
+# ====================================
 
-# 可选依赖（用于高级功能）
-# pillow>=9.0.0             # 图像处理（彩信功能）
-# cryptography>=3.4.0       # 加密功能
-# schedule>=1.2.0            # 任务调度
+# 测试框架
+pytest>=7.0.0,<9.0.0             # 测试框架
+pytest-cov>=4.0.0,<6.0.0         # 测试覆盖率
+
+# 代码质量
+black>=22.0.0                     # 代码格式化
+flake8>=5.0.0                     # 代码检查
+mypy>=1.0.0                       # 类型检查
+
+# ====================================
+# 可选增强功能依赖
+# ====================================
+
+# 图像处理（彩信功能）
+# Pillow>=9.0.0,<11.0.0
+
+# 高级加密功能
+# cryptography>=3.4.0,<42.0.0
+
+# 任务调度
+# schedule>=1.2.0,<2.0.0
+
+# 性能监控
+# psutil[sensors]>=5.9.0
+
+# Excel高级功能
+# xlwings>=0.30.0                  # Excel自动化
+
+# 数据可视化
+# matplotlib>=3.5.0               # 图表绘制
+# plotly>=5.0.0                   # 交互式图表
+
+# ====================================
+# Python版本要求
+# ====================================
+# Python >= 3.8, < 4.0
+
+# ====================================
+# 系统依赖说明
+# ====================================
+# Windows:
+#   - Microsoft Visual C++ 14.0 或更高版本（psycopg2-binary需要）
+#   - 猫池设备驱动程序
+#
+# Linux:
+#   - sudo apt-get install python3-dev libpq-dev
+#   - 串口权限设置: sudo usermod -a -G dialout $USER
+#
+# macOS:
+#   - xcode-select --install
+#   - brew install postgresql
