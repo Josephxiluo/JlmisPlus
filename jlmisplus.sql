@@ -220,22 +220,15 @@ CREATE TABLE tasks (
     tasks_uuid UUID DEFAULT uuid_generate_v4() UNIQUE,
     tasks_title VARCHAR(200) NOT NULL,
     tasks_mode VARCHAR(20) NOT NULL DEFAULT 'sms',
+    tasks_number_mode VARCHAR(20) NOT NULL DEFAULT 'domestic',
     tasks_subject_name VARCHAR(200),
     tasks_message_content TEXT NOT NULL,
-    tasks_mms_attachments JSON,
     templates_id INTEGER,
     tasks_total_count INTEGER NOT NULL DEFAULT 0,
     tasks_success_count INTEGER DEFAULT 0,
     tasks_failed_count INTEGER DEFAULT 0,
     tasks_pending_count INTEGER DEFAULT 0,
     tasks_status VARCHAR(20) DEFAULT 'draft',
-    tasks_priority INTEGER DEFAULT 5,
-    tasks_schedule_type VARCHAR(20) DEFAULT 'immediate',
-    tasks_scheduled_time TIMESTAMP,
-    tasks_recurring_config JSON,
-    tasks_send_config JSON,
-    tasks_port_config JSON,
-    tasks_rate_limit_config JSON,
     tasks_estimated_credits BIGINT,
     tasks_actual_credits BIGINT DEFAULT 0,
     operators_id INTEGER NOT NULL REFERENCES channel_operators(operators_id),
@@ -251,22 +244,15 @@ COMMENT ON TABLE tasks IS '任务表';
 COMMENT ON COLUMN tasks.tasks_uuid IS '任务唯一标识';
 COMMENT ON COLUMN tasks.tasks_title IS '任务标题';
 COMMENT ON COLUMN tasks.tasks_mode IS '任务模式：sms-短信，mms-彩信';
+COMMENT ON COLUMN tasks.tasks_number_mode IS '号码模式：domestic-国内号码，international-国际号码';
 COMMENT ON COLUMN tasks.tasks_subject_name IS '主题名称（彩信专用）';
 COMMENT ON COLUMN tasks.tasks_message_content IS '短信/彩信内容';
-COMMENT ON COLUMN tasks.tasks_mms_attachments IS '彩信附件信息';
 COMMENT ON COLUMN tasks.templates_id IS '消息模板ID';
 COMMENT ON COLUMN tasks.tasks_total_count IS '总发送量';
 COMMENT ON COLUMN tasks.tasks_success_count IS '成功数量';
 COMMENT ON COLUMN tasks.tasks_failed_count IS '失败数量';
 COMMENT ON COLUMN tasks.tasks_pending_count IS '待发送数量';
 COMMENT ON COLUMN tasks.tasks_status IS '状态：draft-草稿，pending-待发送，running-发送中，paused-暂停，completed-完成，failed-失败，cancelled-取消';
-COMMENT ON COLUMN tasks.tasks_priority IS '优先级：1-5，数字越小优先级越高';
-COMMENT ON COLUMN tasks.tasks_schedule_type IS '调度类型：immediate-立即，scheduled-定时，recurring-循环';
-COMMENT ON COLUMN tasks.tasks_scheduled_time IS '计划发送时间';
-COMMENT ON COLUMN tasks.tasks_recurring_config IS '循环配置';
-COMMENT ON COLUMN tasks.tasks_send_config IS '发送配置（间隔、重试等）';
-COMMENT ON COLUMN tasks.tasks_port_config IS '端口配置';
-COMMENT ON COLUMN tasks.tasks_rate_limit_config IS '频率限制配置';
 COMMENT ON COLUMN tasks.tasks_estimated_credits IS '预估消耗积分';
 COMMENT ON COLUMN tasks.tasks_actual_credits IS '实际消耗积分';
 COMMENT ON COLUMN tasks.operators_id IS '创建的操作用户ID';
@@ -360,6 +346,7 @@ CREATE TABLE "public"."message_templates" (
   "templates_id" int4 NOT NULL DEFAULT nextval('message_templates_templates_id_seq'::regclass),
   "templates_name" varchar(200) COLLATE "pg_catalog"."default" NOT NULL,
   "templates_type" varchar(20) COLLATE "pg_catalog"."default" DEFAULT 'sms'::character varying,
+  "templates_credit_cost" DECIMAL(10,4) DEFAULT 1.0000,
   "templates_config" json,
   "created_time" timestamp(6) DEFAULT CURRENT_TIMESTAMP,
   "updated_time" timestamp(6) DEFAULT CURRENT_TIMESTAMP,
@@ -373,15 +360,11 @@ FOR EACH ROW
 EXECUTE PROCEDURE "public"."update_updated_time_column"();
 
 COMMENT ON COLUMN "public"."message_templates"."templates_name" IS '模板名称';
-
 COMMENT ON COLUMN "public"."message_templates"."templates_type" IS '模板类型：sms（短信）、mms（彩信）';
-
+COMMENT ON COLUMN "public"."message_templates"."templates_credit_cost" IS '每条消息消耗积分数';
 COMMENT ON COLUMN "public"."message_templates"."templates_config" IS 'PDU配置规则（JSON格式）';
-
 COMMENT ON COLUMN "public"."message_templates"."templates_status" IS '模板状态：active（启用）、inactive（禁用）';
-
 COMMENT ON COLUMN "public"."message_templates"."templates_description" IS '模板描述说明';
-
 COMMENT ON TABLE "public"."message_templates" IS '消息发送模板配置表';
 
 -- 8.3 数据字典表

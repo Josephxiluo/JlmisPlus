@@ -289,7 +289,7 @@ class AddTaskDialog:
 
         # 5. 模板和号码模式一行显示
         template_row = tk.Frame(form_frame, bg=get_color('background'))
-        template_row.pack(fill='x', pady=(0, 15))
+        template_row.pack(fill='x', pady=(0, 5))
 
         # 左侧：发送模板（改名称）
         template_left = tk.Frame(template_row, bg=get_color('background'))
@@ -369,13 +369,13 @@ class AddTaskDialog:
             relief='solid',
             bd=1
         )
-        self.subject_entry.pack(side='right', fill='x', expand=True, padx=(10, 0))
+        self.subject_entry.pack(side='right', fill='x', expand=True, padx=(5, 0))
 
         # 7. 短信内容
         self.create_field(form_frame, "短信内容:", required=True)
 
         content_container = tk.Frame(form_frame, bg=get_color('background'))
-        content_container.pack(fill='both', expand=True, pady=(0, 20))
+        content_container.pack(fill='both', expand=True, pady=(0, 10))
 
         self.content_text = tk.Text(
             content_container,
@@ -527,8 +527,8 @@ class AddTaskDialog:
 
         if is_mms:
             # 在占位框架中显示主题容器
-            self.subject_container.pack(fill='x', pady=(0, 15))
-            self.subject_placeholder.pack_configure(pady=(0, 15))  # 调整占位框架的间距
+            self.subject_container.pack(fill='x', pady=(5, 5))
+            self.subject_placeholder.pack_configure(pady=(5, 5))  # 调整占位框架的间距
         else:
             # 隐藏主题容器
             self.subject_container.pack_forget()

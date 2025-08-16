@@ -49,8 +49,8 @@ class TaskTestDialog:
         """对话框居中显示"""
         self.dialog.update_idletasks()
         x = self.parent.winfo_x() + (self.parent.winfo_width() // 2) - (400 // 2)
-        y = self.parent.winfo_y() + (self.parent.winfo_height() // 2) - (300 // 2)
-        self.dialog.geometry(f"400x300+{x}+{y}")
+        y = self.parent.winfo_y() + (self.parent.winfo_height() // 2) - (400 // 2)
+        self.dialog.geometry(f"400x500+{x}+{y}")
 
     def create_content(self):
         """创建对话框内容"""
@@ -178,7 +178,7 @@ class TaskTestDialog:
             text="取消",
             font=get_font('button'),
             bg=get_color('gray'),
-            fg='white',
+            fg='#000000',
             relief='flat',
             cursor='hand2',
             command=self.cancel,
@@ -192,7 +192,7 @@ class TaskTestDialog:
             text="确定",
             font=get_font('button'),
             bg=get_color('primary'),
-            fg='white',
+            fg='#000000',
             relief='flat',
             cursor='hand2',
             command=self.confirm,
