@@ -319,13 +319,16 @@ class TaskListWidget:
         self.page_size = 20
 
         # 添加自动刷新相关属性
+        self.auto_refresh_enabled = True
+        self.auto_refresh_interval = 5000  # 5秒刷新一次
         self.auto_refresh_timer = None
-        self.is_auto_refreshing = False
-        self.refresh_interval = 3  # 3秒刷新一次
 
         self.create_widgets()
         self.create_context_menu()
         self.load_tasks()
+
+        # 启动自动刷新
+        self.start_auto_refresh()
 
         print(f"[DEBUG] TaskListWidget初始化 - user_info: {user_info}")
 
@@ -748,7 +751,7 @@ class TaskListWidget:
             self.on_task_select(task)
 
     def start_task_by_id(self, task_id):
-        """通过ID开始任务 - 修复版"""
+        print(f"开始任务: {task_id}")
         try:
             # 1. 首先检查是否有端口已连接
             from services.port_service import port_service
@@ -1117,56 +1120,72 @@ class TaskListWidget:
         return self.card_container
 
     def start_auto_refresh(self):
-        """开始自动刷新"""
-        if not self.is_auto_refreshing:
-            self.is_auto_refreshing = True
-            self._schedule_refresh()
-            print("[DEBUG] 启动自动刷新，间隔: {}秒".format(self.refresh_interval))
+        """启动自动刷新定时器"""
+        if self.auto_refresh_enabled and hasattr(self.parent, 'after'):
+            # 取消之前的定时器
+            if self.auto_refresh_timer:
+                try:
+                    self.parent.after_cancel(self.auto_refresh_timer)
+                except:
+                    pass
 
-    def stop_auto_refresh(self):
-        """停止自动刷新"""
-        self.is_auto_refreshing = False
-        if self.auto_refresh_timer:
-            self.parent.after_cancel(self.auto_refresh_timer)
-            self.auto_refresh_timer = None
-            print("[DEBUG] 停止自动刷新")
-
-    def _schedule_refresh(self):
-        """调度下一次刷新"""
-        if self.is_auto_refreshing:
-            # 执行刷新
-            self._auto_refresh_tasks()
-
-            # 调度下一次刷新（使用tkinter的after方法）
+            # 设置新的定时器
             self.auto_refresh_timer = self.parent.after(
-                self.refresh_interval * 1000,  # 转换为毫秒
-                self._schedule_refresh
+                self.auto_refresh_interval,
+                self.auto_refresh_callback
             )
 
-    def _auto_refresh_tasks(self):
-        """自动刷新任务状态（轻量级更新）"""
+    def auto_refresh_callback(self):
+        """自动刷新回调"""
         try:
-            # 检查是否有运行中的任务
-            has_running_tasks = False
-
+            # 检查是否有正在运行或待执行的任务
+            has_active_tasks = False
             for task in self.tasks:
-                if task.get('status') in ['running', 'sending']:
-                    has_running_tasks = True
+                if task.get('status') in ['running', 'pending', 'sending']:
+                    has_active_tasks = True
                     break
 
-            if has_running_tasks:
-                # 只在有运行中的任务时刷新
-                print("[DEBUG] 自动刷新任务列表...")
-                self.load_tasks()  # 重新加载任务数据
-            else:
-                # 没有运行中的任务，停止自动刷新
-                self.stop_auto_refresh()
+            # 如果有活动任务，刷新列表
+            if has_active_tasks:
+                print("[DEBUG] 检测到活动任务，自动刷新任务列表...")
+                # 保存当前选中的任务
+                selected_task_id = self.selected_task.get('id') if self.selected_task else None
+
+                # 刷新任务列表
+                self.load_tasks()
+
+                # 恢复选中状态
+                if selected_task_id:
+                    for task in self.tasks:
+                        if task.get('id') == selected_task_id:
+                            self.selected_task = task
+                            break
+
+            # 继续下一次定时
+            self.start_auto_refresh()
 
         except Exception as e:
             print(f"[ERROR] 自动刷新失败: {e}")
+            # 出错后仍然继续定时
+            self.start_auto_refresh()
 
+    def stop_auto_refresh(self):
+        """停止自动刷新"""
+        if self.auto_refresh_timer:
+            try:
+                self.parent.after_cancel(self.auto_refresh_timer)
+            except:
+                pass
+            self.auto_refresh_timer = None
+
+    def refresh_tasks(self):
+        """手动刷新任务列表"""
+        print("[DEBUG] 手动刷新任务列表...")
+        self.load_tasks()
+
+    # 在组件销毁时停止定时器（在类的末尾添加）
     def __del__(self):
-        """析构函数，确保停止定时器"""
+        """清理资源"""
         self.stop_auto_refresh()
 
 

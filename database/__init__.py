@@ -4,32 +4,28 @@ Database module for SMS Pool System - tkinter version
 """
 
 from .connection import (
-    DatabaseConnection,
+    DatabaseConnectionWrapper,
     get_db_connection,
     execute_query,
     execute_update,
     execute_many,
-    call_function,
     test_connection,
-    get_database_info,
     close_database,
     init_database
 )
 
 __all__ = [
     # 核心数据库类
-    'DatabaseConnection',
+    'DatabaseConnectionWrapper',
 
     # 便捷函数
     'get_db_connection',
     'execute_query',
     'execute_update',
     'execute_many',
-    'call_function',
 
     # 管理函数
     'test_connection',
-    'get_database_info',
     'close_database',
     'init_database'
 ]

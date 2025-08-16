@@ -327,6 +327,9 @@ class PortGridWidget:
         stats_frame = ctk.CTkFrame(content_container, fg_color='transparent')
         stats_frame.pack(fill='x', pady=(0, get_spacing('sm')))
 
+
+
+
         # 上限信息（左侧）
         limit_info = ctk.CTkFrame(stats_frame, fg_color='transparent')
         limit_info.pack(side='left', fill='x', expand=True)

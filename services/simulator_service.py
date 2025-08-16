@@ -312,6 +312,17 @@ class SimulatorService:
 
             stats = self.task_statistics[task_id]
 
+            # 获取端口信息
+            port_info = None
+            if message.port_name:
+                port = self.port_simulator.get_port(message.port_name)
+                if port:
+                    port_info = {
+                        'port_name': port.port_name,
+                        'carrier': port.carrier,
+                        'send_count': port.send_count
+                    }
+
             if event == 'success':
                 stats['sent'] += 1
                 stats['success'] += 1
@@ -321,16 +332,77 @@ class SimulatorService:
                 rate = self.sms_rate  # 这里简化处理，实际应根据消息类型
                 stats['credits_used'] += rate
 
+                # 更新数据库中的消息明细
+                if port_info:
+                    self._update_message_detail(
+                        message.message_id,
+                        'success',
+                        port_info
+                    )
+
             elif event == 'failed':
                 stats['sent'] += 1
                 stats['failed'] += 1
                 stats['pending'] = max(0, stats['pending'] - 1)
+
+                # 更新数据库中的消息明细
+                if port_info:
+                    self._update_message_detail(
+                        message.message_id,
+                        'failed',
+                        port_info,
+                        error_message=message.error_message
+                    )
 
             # 更新任务进度（这里可以通知UI更新）
             self._update_task_progress(task_id, stats)
 
         except Exception as e:
             log_error(f"处理消息事件异常: {e}")
+
+    def _update_message_detail(self, message_id: int, status: str,
+                               port_info: Dict, error_message: str = None):
+        """更新消息明细的端口信息"""
+        try:
+            from database.connection import execute_update
+            from datetime import datetime
+
+            # 生成模拟的发送号码（基于端口名）
+            port_number = port_info['port_name'].replace('COM', '')
+            sender_number = f"1000{port_number.zfill(4)}"  # 如：10000001
+
+            # 更新消息明细
+            query = """
+            UPDATE task_message_details 
+            SET details_status = %s,
+                sender_number = %s,
+                details_sender_port = %s,
+                details_operator_name = %s,
+                details_failure_reason = %s,
+                send_time = %s,
+                delivery_time = %s,
+                response_time = %s
+            WHERE details_id = %s
+            """
+
+            params = (
+                status,
+                sender_number,
+                port_info['port_name'],
+                port_info['carrier'],
+                error_message,
+                datetime.now(),
+                datetime.now() if status == 'success' else None,
+                1500,  # 模拟响应时间1.5秒
+                message_id
+            )
+
+            execute_update(query, params)
+
+            print(f"[DEBUG] 更新消息{message_id}端口信息: {port_info['port_name']}")
+
+        except Exception as e:
+            log_error(f"更新消息明细失败: {e}")
 
     def _update_task_progress(self, task_id: int, stats: Dict[str, int]):
         """更新任务进度"""

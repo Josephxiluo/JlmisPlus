@@ -121,30 +121,110 @@ class SimulatedPort:
             log_port_action(self.port_name, "断开", success=True)
             return True
 
-    def send_sms(self, port_name: str, phone: str, content: str) -> Tuple[bool, str, float]:
-        """通过指定端口发送短信 - 修复版"""
-        port = self.get_port(port_name)
-        if not port:
-            return False, "端口不存在", 0.0
+    def send_sms(self, phone: str, content: str) -> Tuple[bool, str, float]:
+        """模拟发送短信 - 增强版本"""
+        with self._lock:
+            if not self.is_connected:
+                return False, "端口未连接", 0.0
 
-        # 使用端口的 send_sms 方法（已经包含计数逻辑）
-        success, message, duration = port.send_sms(phone, content)
+            if self._is_sending:
+                return False, "端口正忙", 0.0
 
-        # 记录到发送历史
-        self.send_history.append({
-            'port_name': port_name,
-            'phone_number': phone,
-            'content': content[:50],
-            'success': success,
-            'send_time': duration,
-            'timestamp': datetime.now()
-        })
+            # 检查发送上限
+            if self.send_count >= self.send_limit:
+                # 记录日志
+                log_port_action(
+                    self.port_name,
+                    "发送",
+                    f"已达到发送上限({self.send_limit}条)",
+                    success=False
+                )
+                return False, f"已达到发送上限({self.send_limit}条)", 0.0
 
-        # 保持历史记录数量限制
-        if len(self.send_history) > 1000:
-            self.send_history = self.send_history[-500:]  # 保留最近500条
+            # 检查发送间隔
+            if self.last_send_time:
+                elapsed = (datetime.now() - self.last_send_time).total_seconds() * 1000
+                if elapsed < self.send_interval:
+                    return False, f"发送间隔未到（需等待{self.send_interval - elapsed:.0f}ms）", 0.0
 
-        return success, message, duration
+            self._is_sending = True
+            self.status = SimulatedPortStatus.SENDING.value
+
+        try:
+            # 模拟发送延迟
+            send_time = random.uniform(*self.response_time_range)
+            time.sleep(send_time)
+
+            # 根据成功率决定结果
+            success = random.random() < self.success_rate
+
+            # 模拟各种失败原因
+            if not success:
+                failure_reasons = [
+                    "发送超时",
+                    "号码无效",
+                    "余额不足",
+                    "网络错误",
+                    "短信内容违规",
+                    "接收方已满",
+                    "运营商拒绝",
+                    "信号太弱"
+                ]
+
+                if self.signal_strength < 10:
+                    failure_reason = "信号太弱"
+                else:
+                    failure_reason = random.choice(failure_reasons)
+            else:
+                failure_reason = None
+
+            # 更新统计
+            with self._lock:
+                self.send_count += 1  # 增加发送计数
+                self.total_sent += 1
+                self.last_send_time = datetime.now()
+                self.last_activity = datetime.now()
+
+                if success:
+                    self.success_count += 1
+                    message = f"发送成功 (已发送: {self.send_count}/{self.send_limit})"
+                else:
+                    self.failed_count += 1
+                    message = f"发送失败: {failure_reason}"
+
+                # 记录发送信息
+                log_port_action(
+                    self.port_name,
+                    "发送短信",
+                    f"成功={success}, 计数={self.send_count}/{self.send_limit}",
+                    success=success
+                )
+
+                # 模拟信号波动
+                self._update_signal_strength()
+
+                self._is_sending = False
+                self.status = SimulatedPortStatus.READY.value
+
+                # 如果达到上限，更新状态
+                if self.send_count >= self.send_limit:
+                    self.status = SimulatedPortStatus.BUSY.value
+                    log_port_action(
+                        self.port_name,
+                        "端口状态",
+                        f"已达到发送上限，端口不可用"
+                    )
+
+            return success, message, send_time
+
+        except Exception as e:
+            with self._lock:
+                self._is_sending = False
+                self.status = SimulatedPortStatus.ERROR.value
+                self.error_message = str(e)
+
+            log_error(f"模拟发送短信异常: {e}")
+            return False, f"发送异常: {str(e)}", 0.0
 
     # 7. 添加获取可用端口的方法：
     def get_available_ports(self) -> List[str]:
@@ -354,11 +434,60 @@ class PortSimulator:
         return connected
 
     def send_sms(self, port_name: str, phone: str, content: str) -> Tuple[bool, str, float]:
-        """通过指定端口发送短信"""
+        """通过指定端口发送短信 - 增强版，自动更新计数"""
         port = self.get_port(port_name)
         if port:
-            return port.send_sms(phone, content)
+            # 发送前检查上限
+            if port.send_count >= port.send_limit:
+                log_port_action(
+                    port_name,
+                    "发送",
+                    f"已达到发送上限({port.send_limit}条)",
+                    success=False
+                )
+                return False, f"端口{port_name}已达到发送上限", 0.0
+
+            # 执行发送
+            success, message, duration = port.send_sms(phone, content)
+
+            # 发送成功后检查是否达到上限
+            if success and port.send_count >= port.send_limit:
+                log_port_action(
+                    port_name,
+                    "端口状态",
+                    f"已达到发送上限{port.send_limit}条，需要清除记录后才能继续使用"
+                )
+                # 可选：自动断开连接
+                # port.disconnect()
+
+            return success, message, duration
+
         return False, "端口不存在", 0.0
+
+    def reset_port_count(self, port_name: str):
+        """重置指定端口的发送计数"""
+        port = self.get_port(port_name)
+        if port:
+            port.reset_send_count()
+            log_info(f"端口{port_name}发送计数已重置")
+            return True
+        return False
+
+    def get_port_status(self, port_name: str) -> Dict[str, Any]:
+        """获取端口状态详情"""
+        port = self.get_port(port_name)
+        if port:
+            return {
+                'port_name': port_name,
+                'is_connected': port.is_connected,
+                'send_count': port.send_count,
+                'send_limit': port.send_limit,
+                'success_count': port.success_count,
+                'failed_count': port.failed_count,
+                'can_send': port.can_send(),
+                'usage_rate': round(port.send_count / port.send_limit * 100, 1) if port.send_limit > 0 else 0
+            }
+        return None
 
     def get_port_statistics(self) -> Dict[str, Any]:
         """获取所有端口统计信息"""
