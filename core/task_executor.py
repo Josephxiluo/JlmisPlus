@@ -339,7 +339,7 @@ class TaskExecutor:
             self._on_message_failed(message['details_id'])
 
     def _simulate_send_with_port_info(self, phone: str, content: str) -> Tuple[bool, Dict]:
-        """模拟发送并返回端口信息"""
+        """模拟发送并返回端口信息 - 修复版"""
         try:
             import random
             from core.simulator.port_simulator import port_simulator
@@ -359,47 +359,39 @@ class TaskExecutor:
 
             # 随机选择一个端口
             port_name = random.choice(connected_ports)
-
-            # 连接端口（如果需要）
-            if not port_simulator.ports[port_name].is_connected:
-                port_simulator.connect_port(port_name)
-
-            # 发送短信
-            success, message, duration = port_simulator.send_sms(port_name, phone, content)
-
-            # 获取端口信息
             port = port_simulator.get_port(port_name)
+
+            # 调用端口的发送方法（这会自动更新计数）
+            success, message, duration = port.send_sms(phone, content)
+
+            # 构建端口信息
             port_info = {
                 'port_name': port_name,
-                'sender_number': port.sim_number if hasattr(port, 'sim_number') else f"SIM_{port_name}",
-                'operator_name': port.carrier if hasattr(port, 'carrier') else 'unknown',
-                'send_count': port.send_count if hasattr(port, 'send_count') else 0,
-                'send_limit': port.send_limit if hasattr(port, 'send_limit') else 60
+                'sender_number': getattr(port, 'sim_number', f"138{port_name.replace('COM', '').zfill(8)}"),
+                'operator_name': getattr(port, 'carrier', 'unknown'),
+                'send_count': port.send_count,
+                'send_limit': port.send_limit
             }
 
-            # 更新端口发送计数
-            if success and hasattr(port, 'send_count'):
-                port.send_count += 1
-                if success:
-                    port.success_count = getattr(port, 'success_count', 0) + 1
-                else:
-                    port.failed_count = getattr(port, 'failed_count', 0) + 1
+            logger.info(f"端口 {port_name} 发送{'成功' if success else '失败'}, "
+                        f"计数: {port_info['send_count']}/{port_info['send_limit']}, "
+                        f"运营商: {port_info['operator_name']}")
 
-                logger.info(f"端口 {port_name} 发送计数: {port.send_count}/{port.send_limit}")
-
-                # 如果达到上限，自动断开连接
-                if port.send_count >= port.send_limit:
-                    logger.warning(f"端口 {port_name} 已达到发送上限，自动断开")
-                    port_simulator.disconnect_port(port_name)
+            # 如果达到上限，自动断开连接
+            if port.send_count >= port.send_limit:
+                logger.warning(f"端口 {port_name} 已达到发送上限，自动断开")
+                port_simulator.disconnect_port(port_name)
 
             return success, port_info
 
         except Exception as e:
             logger.error(f"模拟发送失败: {e}")
+            import traceback
+            traceback.print_exc()
             return False, {'port_name': None, 'error': str(e)}
 
     def _update_message_with_port_info(self, msg_id: int, port_info: Dict, status: str):
-        """更新消息状态并记录端口信息"""
+        """更新消息状态并记录端口信息 - 修复版"""
         try:
             query = """
                 UPDATE task_message_details
@@ -414,9 +406,9 @@ class TaskExecutor:
 
             params = (
                 status,
-                port_info.get('port_name'),
-                port_info.get('sender_number'),
-                port_info.get('operator_name'),
+                port_info.get('port_name', 'Unknown'),
+                port_info.get('sender_number', ''),
+                port_info.get('operator_name', 'Unknown'),
                 datetime.now(),
                 datetime.now(),
                 msg_id
@@ -424,7 +416,10 @@ class TaskExecutor:
 
             execute_update(query, params)
 
-            logger.debug(f"消息 {msg_id} 更新成功，端口: {port_info.get('port_name')}, 状态: {status}")
+            logger.info(f"消息 {msg_id} 更新成功 - 端口: {port_info.get('port_name')}, "
+                        f"号码: {port_info.get('sender_number')}, "
+                        f"运营商: {port_info.get('operator_name')}, "
+                        f"状态: {status}")
 
         except Exception as e:
             logger.error(f"更新消息端口信息失败: {e}")

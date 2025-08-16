@@ -14,292 +14,30 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from ui.styles import get_color, get_font, get_spacing, create_modern_button, create_card_frame, create_scrollable_frame, create_label, create_status_badge
 
-# 导入真实的服务和数据库连接
+# 添加项目根目录到路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from ui.styles import get_color, get_font, get_spacing, create_modern_button, create_card_frame, create_scrollable_frame, create_label, create_status_badge
+
+# 导入真实的任务服务
 try:
-    from database.connection import execute_query, get_db_connection
-    USE_REAL_SERVICE = True
-    print("[DEBUG] 使用真实数据库服务")
+    from services.task_service import task_service
+    USE_REAL_TASK_SERVICE = True
+    print("[DEBUG] 使用真实任务服务")
+except ImportError as e:
+    print(f"[WARNING] 无法导入任务服务: {e}")
+    USE_REAL_TASK_SERVICE = False
+    task_service = None
+
+# 导入数据库连接（用于获取任务列表）
+try:
+    from database.connection import execute_query
+    USE_REAL_DB = True
+    print("[DEBUG] 使用真实数据库连接")
 except ImportError as e:
     print(f"[WARNING] 无法导入数据库连接: {e}")
-    USE_REAL_SERVICE = False
+    USE_REAL_DB = False
 
-# 创建 TaskService 类
-class TaskService:
-    def get_user_tasks(self, user_id, status=None, page=1, page_size=20):
-        """获取用户任务 - 真实实现"""
-        print(f"[DEBUG] TaskService.get_user_tasks called - user_id: {user_id}, status: {status}, page: {page}")
-
-        if USE_REAL_SERVICE:
-            try:
-                # 构建查询条件
-                where_parts = ["operators_id = %s"]
-                params = [user_id]
-
-                if status:
-                    where_parts.append("tasks_status = %s")
-                    params.append(status)
-
-                where_clause = " AND ".join(where_parts)
-
-                # 计算偏移量
-                offset = (page - 1) * page_size
-
-                # 查询任务总数
-                count_query = f"""
-                    SELECT COUNT(*) 
-                    FROM tasks 
-                    WHERE {where_clause}
-                """
-                count_result = execute_query(count_query, tuple(params), fetch_one=True)
-                total_count = count_result[0] if count_result else 0
-
-                print(f"[DEBUG] 数据库中找到 {total_count} 个任务")
-
-                # 查询任务列表
-                query = f"""
-                    SELECT 
-                        tasks_id as id,
-                        tasks_title as title,
-                        tasks_status as status,
-                        tasks_total_count as total,
-                        tasks_success_count as success_count,
-                        tasks_failed_count as failed_count,
-                        tasks_pending_count as pending_count,
-                        tasks_mode as mode,
-                        tasks_message_content as content,
-                        created_time,
-                        updated_time
-                    FROM tasks 
-                    WHERE {where_clause}
-                    ORDER BY created_time DESC
-                    LIMIT %s OFFSET %s
-                """
-
-                params.extend([page_size, offset])
-                results = execute_query(query, tuple(params), dict_cursor=True)
-
-                # 转换数据格式
-                tasks = []
-                for row in results:
-                    # 计算已发送数量和进度
-                    sent = row['success_count'] + row['failed_count']
-                    progress = 0
-                    if row['total'] > 0:
-                        progress = (sent / row['total']) * 100
-
-                    task = {
-                        'id': row['id'],
-                        'title': row['title'] or f"v{row['id']}",
-                        'status': row['status'] or 'draft',
-                        'total': row['total'] or 0,
-                        'sent': sent,
-                        'success_count': row['success_count'] or 0,
-                        'failed_count': row['failed_count'] or 0,
-                        'pending_count': row['pending_count'] or 0,
-                        'progress': round(progress, 1),
-                        'mode': row['mode'] or 'sms',
-                        'content': row['content'] or '',
-                        'created_time': row['created_time'],
-                        'updated_time': row['updated_time']
-                    }
-                    tasks.append(task)
-                    print(f"[DEBUG] 加载任务: ID={task['id']}, Title={task['title']}, Status={task['status']}")
-
-                return {
-                    'success': True,
-                    'tasks': tasks,
-                    'total_count': total_count,
-                    'page': page,
-                    'page_size': page_size,
-                    'total_pages': (total_count + page_size - 1) // page_size if total_count > 0 else 0
-                }
-
-            except Exception as e:
-                print(f"[ERROR] 从数据库获取任务失败: {e}")
-                import traceback
-                traceback.print_exc()
-                # 失败时返回模拟数据
-                return self._get_mock_tasks(user_id, status, page, page_size)
-        else:
-            # 使用模拟数据
-            return self._get_mock_tasks(user_id, status, page, page_size)
-
-    def _get_mock_tasks(self, user_id, status=None, page=1, page_size=20):
-        """获取模拟任务数据"""
-        print("[DEBUG] 使用模拟任务数据")
-        mock_tasks = [
-            {
-                'id': 'v342',
-                'title': 'v342',
-                'status': 'stopped',
-                'total': 150,
-                'sent': 45,
-                'success_count': 38,
-                'failed_count': 7,
-                'pending_count': 105,
-                'progress': 30.0
-            },
-            {
-                'id': 'v365',
-                'title': 'v365',
-                'status': 'running',
-                'total': 200,
-                'sent': 120,
-                'success_count': 108,
-                'failed_count': 12,
-                'pending_count': 80,
-                'progress': 60.0
-            },
-            {
-                'id': 'v378',
-                'title': 'v378',
-                'status': 'stopped',
-                'total': 150,
-                'sent': 0,
-                'success_count': 0,
-                'failed_count': 0,
-                'pending_count': 150,
-                'progress': 0.0
-            }
-        ]
-
-        # 根据状态过滤
-        if status:
-            mock_tasks = [t for t in mock_tasks if t['status'] == status]
-
-        return {
-            'success': True,
-            'tasks': mock_tasks,
-            'total_count': len(mock_tasks),
-            'page': page,
-            'page_size': page_size,
-            'total_pages': 1
-        }
-
-    def start_task(self, task_id):
-        """开始任务"""
-        print(f"[DEBUG] 开始任务: {task_id}")
-        if USE_REAL_SERVICE:
-            try:
-                # 更新任务状态为运行中
-                query = "UPDATE tasks SET tasks_status = %s, tasks_started_time = %s WHERE tasks_id = %s"
-                from database.connection import execute_update
-                result = execute_update(query, ('running', datetime.now(), task_id))
-                return {'success': result is not None}
-            except Exception as e:
-                print(f"[ERROR] 开始任务失败: {e}")
-                return {'success': False, 'message': str(e)}
-        return {'success': True}
-
-    def pause_task(self, task_id):
-        """暂停任务"""
-        print(f"[DEBUG] 暂停任务: {task_id}")
-        if USE_REAL_SERVICE:
-            try:
-                # 更新任务状态为暂停
-                query = "UPDATE tasks SET tasks_status = %s WHERE tasks_id = %s"
-                from database.connection import execute_update
-                result = execute_update(query, ('paused', task_id))
-                return {'success': result is not None}
-            except Exception as e:
-                print(f"[ERROR] 暂停任务失败: {e}")
-                return {'success': False, 'message': str(e)}
-        return {'success': True}
-
-    def stop_all_tasks(self, user_id):
-        """停止所有任务"""
-        print(f"[DEBUG] 停止用户 {user_id} 的所有任务")
-        if USE_REAL_SERVICE:
-            try:
-                query = """
-                    UPDATE tasks 
-                    SET tasks_status = 'paused' 
-                    WHERE operators_id = %s AND tasks_status = 'running'
-                """
-                from database.connection import execute_update
-                affected = execute_update(query, (user_id,))
-                return {'success': True, 'count': affected or 0}
-            except Exception as e:
-                print(f"[ERROR] 停止所有任务失败: {e}")
-                return {'success': False, 'message': str(e)}
-        return {'success': True, 'count': 2}
-
-    def start_all_tasks(self, user_id):
-        """开始所有任务"""
-        print(f"[DEBUG] 开始用户 {user_id} 的所有任务")
-        if USE_REAL_SERVICE:
-            try:
-                query = """
-                    UPDATE tasks 
-                    SET tasks_status = 'pending' 
-                    WHERE operators_id = %s AND tasks_status IN ('draft', 'paused')
-                """
-                from database.connection import execute_update
-                affected = execute_update(query, (user_id,))
-                return {'success': True, 'count': affected or 0}
-            except Exception as e:
-                print(f"[ERROR] 开始所有任务失败: {e}")
-                return {'success': False, 'message': str(e)}
-        return {'success': True, 'count': 1}
-
-    def clear_completed_tasks(self, user_id):
-        """清理完成的任务"""
-        print(f"[DEBUG] 清理用户 {user_id} 的完成任务")
-        if USE_REAL_SERVICE:
-            try:
-                query = """
-                    DELETE FROM tasks 
-                    WHERE operators_id = %s AND tasks_status = 'completed'
-                """
-                from database.connection import execute_update
-                affected = execute_update(query, (user_id,))
-                return {'success': True, 'count': affected or 0}
-            except Exception as e:
-                print(f"[ERROR] 清理完成任务失败: {e}")
-                return {'success': False, 'message': str(e)}
-        return {'success': True, 'count': 1}
-
-    def retry_failed(self, task_id):
-        """重试失败的消息"""
-        print(f"[DEBUG] 重试任务 {task_id} 的失败消息")
-        # TODO: 实现重试失败消息的逻辑
-        return {'success': True, 'count': 3}
-
-    def delete_task(self, task_id):
-        """删除任务"""
-        print(f"[DEBUG] 删除任务: {task_id}")
-        if USE_REAL_SERVICE:
-            try:
-                query = "DELETE FROM tasks WHERE tasks_id = %s"
-                from database.connection import execute_update
-                result = execute_update(query, (task_id,))
-                return {'success': result is not None}
-            except Exception as e:
-                print(f"[ERROR] 删除任务失败: {e}")
-                return {'success': False, 'message': str(e)}
-        return {'success': True}
-
-    def test_task(self, data):
-        """测试任务"""
-        return {
-            'success': True,
-            'message': f"测试短信已发送到 {data.get('test_phone')}",
-            'send_time': datetime.now().strftime('%H:%M:%S')
-        }
-
-    def update_task_content(self, data):
-        """更新任务内容"""
-        task_id = data.get('task_id')
-        if USE_REAL_SERVICE:
-            try:
-                query = "UPDATE tasks SET tasks_message_content = %s WHERE tasks_id = %s"
-                from database.connection import execute_update
-                result = execute_update(query, (data.get('content'), task_id))
-                return {'success': result is not None, 'message': '任务内容已更新'}
-            except Exception as e:
-                print(f"[ERROR] 更新任务内容失败: {e}")
-                return {'success': False, 'message': str(e)}
-        return {'success': True, 'message': '任务内容已更新'}
 
 
 class TaskListWidget:
@@ -310,7 +48,12 @@ class TaskListWidget:
         self.user_info = user_info
         self.on_task_select = on_task_select
         self.on_task_update = on_task_update
-        self.task_service = TaskService()
+
+        # 使用真实的任务服务
+        self.task_service = task_service
+        if not self.task_service:
+            print("[ERROR] 任务服务未初始化")
+
         self.selected_task = None
         self.tasks = []
         self.task_items = {}
@@ -320,7 +63,7 @@ class TaskListWidget:
 
         # 添加自动刷新相关属性
         self.auto_refresh_enabled = True
-        self.auto_refresh_interval = 5000  # 5秒刷新一次
+        self.auto_refresh_interval = 3000  # 改为3秒刷新一次（原来是5秒）
         self.auto_refresh_timer = None
 
         self.create_widgets()
@@ -751,8 +494,10 @@ class TaskListWidget:
             self.on_task_select(task)
 
     def start_task_by_id(self, task_id):
-        print(f"开始任务: {task_id}")
+        """通过ID开始任务 - 使用真实的任务执行器"""
+        print(f"[DEBUG] 开始任务: {task_id}")
         try:
+
             # 1. 首先检查是否有端口已连接
             from services.port_service import port_service
             ports_result = port_service.get_ports()
@@ -769,25 +514,29 @@ class TaskListWidget:
                     )
                     return
 
-            # 2. 使用真实的任务服务来启动任务
-            from services.task_service import task_service
-            result = task_service.start_task(task_id)
+            # 2. 使用任务服务启动任务
+            if self.task_service:
+                print(f"[DEBUG] 调用 task_service.start_task({task_id})")
+                result = self.task_service.start_task(task_id)
 
-            if result['success']:
-                messagebox.showinfo("成功", f"任务已开始执行，使用 {len(connected_ports)} 个端口")
+                if result['success']:
+                    messagebox.showinfo("成功", f"任务已开始执行，使用 {len(connected_ports)} 个端口")
 
-                # 启动自动刷新
-                self.start_auto_refresh()
+                    # 立即刷新任务列表
+                    self.refresh_tasks()
 
-                # 刷新任务列表显示
-                self.refresh_tasks()
+                    # 加快刷新频率
+                    self.auto_refresh_interval = 2000  # 任务运行时2秒刷新一次
+                    self.start_auto_refresh()
 
-                # 更新任务项的状态显示（如果存在）
-                if task_id in self.task_items:
-                    item = self.task_items[task_id]
-                    item['status_badge'].configure(text="运行中")
+                    # 更新任务项的状态显示
+                    if task_id in self.task_items:
+                        item = self.task_items[task_id]
+                        item['status_badge'].configure(text="运行中")
+                else:
+                    messagebox.showerror("失败", result.get('message', '开始任务失败'))
             else:
-                messagebox.showerror("失败", result.get('message', '开始任务失败'))
+                messagebox.showerror("错误", "任务服务未初始化")
 
         except Exception as e:
             print(f"[ERROR] 开始任务失败: {e}")
@@ -796,21 +545,22 @@ class TaskListWidget:
             messagebox.showerror("错误", f"开始任务失败：{str(e)}")
 
     def pause_task_by_id(self, task_id):
-        """通过ID暂停任务 - 修复版"""
+        """通过ID暂停任务"""
         try:
-            from services.task_service import task_service
-            result = task_service.pause_task(task_id)
+            if self.task_service:
+                result = self.task_service.pause_task(task_id)
 
-            if result['success']:
-                messagebox.showinfo("成功", "任务已暂停")
-                self.refresh_tasks()
+                if result['success']:
+                    messagebox.showinfo("成功", "任务已暂停")
+                    self.refresh_tasks()
 
-                # 更新任务项的状态显示
-                if task_id in self.task_items:
-                    item = self.task_items[task_id]
-                    item['status_badge'].configure(text="已暂停")
+                    if task_id in self.task_items:
+                        item = self.task_items[task_id]
+                        item['status_badge'].configure(text="已暂停")
+                else:
+                    messagebox.showerror("失败", result.get('message', '暂停任务失败'))
             else:
-                messagebox.showerror("失败", result.get('message', '暂停任务失败'))
+                messagebox.showerror("错误", "任务服务未初始化")
 
         except Exception as e:
             print(f"[ERROR] 暂停任务失败: {e}")
@@ -1136,18 +886,19 @@ class TaskListWidget:
             )
 
     def auto_refresh_callback(self):
-        """自动刷新回调"""
+        """自动刷新回调 - 增强版"""
         try:
             # 检查是否有正在运行或待执行的任务
             has_active_tasks = False
             for task in self.tasks:
-                if task.get('status') in ['running', 'pending', 'sending']:
+                if task.get('status') in ['running', 'pending', 'sending', 'paused']:  # 添加paused状态
                     has_active_tasks = True
                     break
 
-            # 如果有活动任务，刷新列表
-            if has_active_tasks:
-                print("[DEBUG] 检测到活动任务，自动刷新任务列表...")
+            # 如果有活动任务或者任务列表为空，都刷新列表
+            if has_active_tasks or len(self.tasks) == 0:
+                print("[DEBUG] 自动刷新任务列表...")
+
                 # 保存当前选中的任务
                 selected_task_id = self.selected_task.get('id') if self.selected_task else None
 
@@ -1159,6 +910,12 @@ class TaskListWidget:
                     for task in self.tasks:
                         if task.get('id') == selected_task_id:
                             self.selected_task = task
+                            # 更新任务项的显示
+                            if selected_task_id in self.task_items:
+                                self.task_items[selected_task_id]['frame'].configure(
+                                    border_color=get_color('primary'),
+                                    border_width=2
+                                )
                             break
 
             # 继续下一次定时

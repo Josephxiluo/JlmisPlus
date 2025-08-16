@@ -258,20 +258,43 @@ class SimulatedPort:
             self.signal_strength = random.randint(15, 25)
 
     def reset_send_count(self):
-        """重置发送计数"""
+        """重置发送计数 - 修复版"""
         with self._lock:
+            old_count = self.send_count
             self.send_count = 0
-            log_port_action(self.port_name, "重置发送计数")
+
+            # 如果之前是BUSY状态，恢复为READY
+            if self.status == SimulatedPortStatus.BUSY.value and self.is_connected:
+                self.status = SimulatedPortStatus.READY.value
+
+            log_port_action(
+                self.port_name,
+                "重置发送计数",
+                f"原计数: {old_count}, 新计数: 0"
+            )
 
     def clear_statistics(self):
-        """清除统计信息"""
+        """清除统计信息 - 修复版"""
         with self._lock:
+            old_send_count = self.send_count
+            old_success_count = self.success_count
+            old_failed_count = self.failed_count
+
             self.send_count = 0
             self.success_count = 0
             self.failed_count = 0
-            self.last_clear_time = datetime.now()
             self.total_sent = 0
-            log_port_action(self.port_name, "清除统计")
+            self.last_clear_time = datetime.now()
+
+            # 如果之前是BUSY状态，恢复为READY
+            if self.status == SimulatedPortStatus.BUSY.value and self.is_connected:
+                self.status = SimulatedPortStatus.READY.value
+
+            log_port_action(
+                self.port_name,
+                "清除统计",
+                f"清除前: 发送{old_send_count}, 成功{old_success_count}, 失败{old_failed_count}"
+            )
 
     def get_status_info(self) -> Dict[str, Any]:
         """获取状态信息"""
@@ -385,7 +408,7 @@ class PortSimulator:
         return available_ports
 
     def connect_port(self, port_name: str) -> bool:
-        """连接端口 - 修复版"""
+        """连接端口"""
         if port_name in self.ports:
             port = self.ports[port_name]
             # 使用端口自己的 connect 方法
@@ -434,35 +457,35 @@ class PortSimulator:
         return connected
 
     def send_sms(self, port_name: str, phone: str, content: str) -> Tuple[bool, str, float]:
-        """通过指定端口发送短信 - 增强版，自动更新计数"""
+        """通过指定端口发送短信 - 正确实现"""
+        # 获取指定的端口对象
         port = self.get_port(port_name)
-        if port:
-            # 发送前检查上限
-            if port.send_count >= port.send_limit:
-                log_port_action(
-                    port_name,
-                    "发送",
-                    f"已达到发送上限({port.send_limit}条)",
-                    success=False
-                )
-                return False, f"端口{port_name}已达到发送上限", 0.0
+        if not port:
+            log_error(f"端口 {port_name} 不存在")
+            return False, f"端口 {port_name} 不存在", 0.0
 
-            # 执行发送
-            success, message, duration = port.send_sms(phone, content)
+        # 检查端口是否已连接
+        if not port.is_connected:
+            log_error(f"端口 {port_name} 未连接")
+            return False, f"端口 {port_name} 未连接", 0.0
 
-            # 发送成功后检查是否达到上限
-            if success and port.send_count >= port.send_limit:
-                log_port_action(
-                    port_name,
-                    "端口状态",
-                    f"已达到发送上限{port.send_limit}条，需要清除记录后才能继续使用"
-                )
-                # 可选：自动断开连接
-                # port.disconnect()
+        # 调用端口对象的 send_sms 方法
+        success, message, duration = port.send_sms(phone, content)
 
-            return success, message, duration
+        # 记录发送历史（可选）
+        self.send_history.append({
+            'port_name': port_name,
+            'phone': phone,
+            'success': success,
+            'message': message,
+            'time': datetime.now()
+        })
 
-        return False, "端口不存在", 0.0
+        # 限制历史记录数量
+        if len(self.send_history) > 1000:
+            self.send_history = self.send_history[-500:]
+
+        return success, message, duration
 
     def reset_port_count(self, port_name: str):
         """重置指定端口的发送计数"""

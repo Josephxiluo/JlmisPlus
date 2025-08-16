@@ -116,6 +116,8 @@ class TaskService:
     def start_task(self, task_id: int) -> Dict[str, Any]:
         """启动任务 - 修复版，添加端口检查"""
         try:
+            print(f"[DEBUG] TaskService.start_task 被调用，task_id: {task_id}")
+
             # 检查是否有可用端口
             from services.port_service import port_service
             ports_result = port_service.get_ports()
@@ -131,6 +133,7 @@ class TaskService:
                     }
 
                 print(f"[DEBUG] 找到 {len(connected_ports)} 个已连接端口")
+
 
             # 在新线程中启动任务，避免阻塞UI
             def start_in_thread():
